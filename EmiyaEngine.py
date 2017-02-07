@@ -32,15 +32,18 @@ class EmiyaEngineCore:
     AfterSignal = ''        # 处理后的信号
     AfterSignalSR = 0       # 处理后的采样率
     SplitSize = 0           # 倒腾区大小
+    AnalysisWindow = False   # 分析接续点用的单边FFT是否加窗
     MidSRCFalse = False     # SRC开关, 为True时就会取消掉SRC步骤
     MidPrint = False        # 打印细节日志开关
     MidPrintProgress = True # 打印进度信息
 
-    def __init__(self, _InputFilePath, _DebugSwitch, _SplitSize):
+    def __init__(self, _InputFilePath, _DebugSwitch, _SplitSize, _WindowSwitch):
         # 输入样本:
         # 信号被加载为ndarray结构，有两个声道各以一维array形式存在
         self.ReadyFilePath = _InputFilePath
         self.SplitSize = _SplitSize
+        if _WindowSwitch == 1:
+            self.AnalysisWindow = True
         if _DebugSwitch == 0:
             MidPrintProgress = False
         elif _DebugSwitch == 1:
@@ -179,8 +182,10 @@ class EmiyaEngineCore:
                         _TempSignal = np.append(_TempSignal, [0])
                         SuffixLength += 1
                     # 执行FFT运算, 单边谱用于分析, 双边谱用于处理
+                    if self.AnalysisWindow:
+                        _TempSignal *= scipy.signal.hann(_FFTPointCount, sym=0)
                     _MidFFTResultDouble = np.fft.fft(_TempSignal,_FFTPointCount)/(_FFTPointCount)
-                    _MidFFTResultSingle = np.fft.fft(_TempSignal*scipy.signal.hann(_FFTPointCount, sym=0),_FFTPointCount)/(_FFTPointCount/2)
+                    _MidFFTResultSingle = np.fft.fft(_TempSignal,_FFTPointCount)/(_FFTPointCount/2)
                     # 获取当前分段最大振幅, 处理阈值点
                     _MidBaseFreqAmp, _MidThresholdPoint = self.MidFindThresholdPoint(_MidFFTResultSingle,_FFTPointCount)
                     # 构造抖动到当前FFT实际值上
@@ -232,8 +237,8 @@ class EmiyaEngineCore:
         self.FinSaveFile()
 
 
-def Main(_input,_debug,_size):
-    Processor = EmiyaEngineCore(_input,_debug,_size)
+def Main(_input,_debug,_size,_window):
+    Processor = EmiyaEngineCore(_input,_debug,_size,_window)
 
 if __name__ == "__main__":
     
@@ -252,11 +257,14 @@ if __name__ == "__main__":
     parser.add_argument('-s', '--size', help='倒腾区大小. 默认 500. \n'
                                             '使用倒腾区是因为 numpy 做大数组 append 速度远低于小数组, \n'
                                             '故加入小数组多倒腾一手, 这个参数就是小数组的尺寸.')
+    parser.add_argument('-w', '--window', help='分析用汉宁Hann双余弦窗启用开关. 默认不使用.\n'
+                                               '输入 0 代表不使用, 1 代表使用.')
 
     args = parser.parse_args()
     _input = args.input
     _debug = args.debug
     _size = args.size
+    _window = args.window
     
     if not _input:
         print("缺少输入文件参数，请使用 --help 参考!")
@@ -265,6 +273,8 @@ if __name__ == "__main__":
         _debug = 1
     if not _size:
         _size = 500
+    if not _window:
+        _window = 0
     
-    Main(_input,_debug,_size)
+    Main(_input,_debug,_size,_window)
 
