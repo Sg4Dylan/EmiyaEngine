@@ -32,7 +32,7 @@ class EmiyaEngineCore:
     AfterSignal = ''        # 处理后的信号
     AfterSignalSR = 0       # 处理后的采样率
     SplitSize = 0           # 倒腾区大小
-    AnalysisWindow = False   # 分析接续点用的单边FFT是否加窗
+    AnalysisWindow = False  # 分析接续点用的单边FFT是否加窗
     MidSRCFalse = False     # SRC开关, 为True时就会取消掉SRC步骤
     MidPrint = False        # 打印细节日志开关
     MidPrintProgress = True # 打印进度信息
