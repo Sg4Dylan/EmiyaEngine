@@ -26,21 +26,21 @@ Emiya Engine 是一个用来丰富音频频谱的脚本。可以将频谱变得�
 ####依赖安装建议
 Windows平台：
 
-> 实际上 librosa 的依赖非常多，如果使用 `pip`安装，可能会导致出错，
-> 建议直接在[这里](http://www.lfd.uci.edu/~gohlke/pythonlibs/)下载二进制包使用`pip`离线安装。
-> 除了以上列表的依赖，还有`Cython` 和 `scikit-learn`，建议一块装了。
-> `librosa` 需要配置 `ffmpeg` 的目录，
-> 找到 `Python` 安装目录下 `Lib\site-packages\audioread` 文件夹的 `ffdec.py` 文件。
-> 修改第 32 行，修改为你的 `ffmpeg` 程序路径，比如我的放在 F 盘根目录，设置成这样：
-> `COMMANDS = ('F:\\ffmpeg.exe', 'avconv')`
+> 实际上 librosa 的依赖非常多，如果使用 `pip`安装，可能会导致出错，  
+> 建议直接在[这里](http://www.lfd.uci.edu/~gohlke/pythonlibs/)下载二进制包使用`pip`离线安装。  
+> 除了以上列表的依赖，还有`Cython` 和 `scikit-learn`，建议一块装了。  
+> `librosa` 需要配置 `ffmpeg` 的目录，  
+> 找到 `Python` 安装目录下 `Lib\site-packages\audioread` 文件夹的 `ffdec.py` 文件。  
+> 修改第 32 行，修改为你的 `ffmpeg` 程序路径，比如我的放在 F 盘根目录，设置成这样：  
+> `COMMANDS = ('F:\\ffmpeg.exe', 'avconv')`  
 
 Linux平台：
 
-> ArchLinux 上建议用 pacman 一路搞定 numpy scipy scikit-learn Cython，当然使用pip也是OK的。 
-> Debian/Ubuntu 上默认源似乎必须用 apt-get 安装，有一些包用 pip 安装有些问题。 
-> 与 Windows 平台一样，也需要为 librosa安装后端解码音频文件，
-> 直接使用发行版自带的包管理器安装 ffmpeg 就可以。
-> 如果出错了，建议从源编译最新的放在原来的路径下。
+> ArchLinux 上建议用 pacman 一路搞定 numpy scipy scikit-learn Cython，当然使用pip也是OK的。  
+> Debian/Ubuntu 上默认源似乎必须用 apt-get 安装，有一些包用 pip 安装有些问题。  
+> 与 Windows 平台一样，也需要为 librosa安装后端解码音频文件，  
+> 直接使用发行版自带的包管理器安装 ffmpeg 就可以。  
+> 如果出错了，建议从源编译最新的放在原来的路径下。  
 
 ###命令行帮助：
 
