@@ -211,16 +211,16 @@ class EmiyaEngineCore:
                     # 已消耗时间
                     _MidUsedTime = datetime.datetime.now()-_MidStartTime
                     # 估算剩余时间
-                    _MidEtaTime = ((datetime.datetime.now()-_MidStartTime)/((1 if SamplePointIndex==0 else SamplePointIndex)/_MidDivCount))-_MidUsedTime
+                    _MidEtaTime = ((datetime.datetime.now()-_MidStartTime)/((SamplePointIndex+1)/_MidDivCount))-_MidUsedTime
                     # 构造显示文本
                     if ChannelIndex == 0:
                         _TempArrayLeft = np.append(_TempArrayLeft, _EachPieceLeft)
                         if self.MidPrintProgress:
-                            print("Left channel progress rate -> " + Fore.CYAN + str(SamplePointIndex) + " / " + str(_MidDivCount) + Fore.WHITE + " TIME USED -> " + Fore.YELLOW + str(_MidUsedTime) + Fore.WHITE + " ETA -> " + Fore.GREEN + str(_MidEtaTime))
+                            print("Left channel progress rate -> " + Fore.CYAN + str(SamplePointIndex) + " / " + str(_MidDivCount-1) + Fore.WHITE + " TIME USED -> " + Fore.YELLOW + str(_MidUsedTime) + Fore.WHITE + " ETA -> " + Fore.GREEN + str(_MidEtaTime))
                     else:
                         _TempArrayRight = np.append(_TempArrayRight, _EachPieceRight)
                         if self.MidPrintProgress:
-                            print("Right channel progress rate -> " + Fore.CYAN + str(SamplePointIndex) + " / " + str(_MidDivCount) + Fore.WHITE + " TIME USED -> " + Fore.YELLOW + str(_MidUsedTime) + Fore.WHITE + " ETA -> " + Fore.GREEN + str(_MidEtaTime))
+                            print("Right channel progress rate -> " + Fore.CYAN + str(SamplePointIndex) + " / " + str(_MidDivCount-1) + Fore.WHITE + " TIME USED -> " + Fore.YELLOW + str(_MidUsedTime) + Fore.WHITE + " ETA -> " + Fore.GREEN + str(_MidEtaTime))
                 else:
                     _TempAppendCount = 0
                     if ChannelIndex == 0:
