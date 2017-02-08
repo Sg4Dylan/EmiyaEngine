@@ -22,6 +22,7 @@ Emiya Engine 是一个用来丰富音频频谱的脚本。可以将频谱变得�
  - librosa
  - resampy
  - colorama
+ - PyQt5 (GUI版依赖)
 
 ####依赖安装建议
 Windows平台：
