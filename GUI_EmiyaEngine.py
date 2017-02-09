@@ -215,7 +215,10 @@ class EmiyaEngineCore(QtCore.QThread):
                     # 完整任务消耗时间
                     _MidTotalUsedTime = datetime.datetime.now()-_MidStartTimeGlobal
                     # 预计总消耗时间
-                    _MidTotalEtaTime = (_MidTotalUsedTime/((SamplePointIndex+1)/_MidDivCount))*2-_MidTotalUsedTime
+                    if ChannelIndex == 0:
+                        _MidTotalEtaTime = (_MidTotalUsedTime/((SamplePointIndex+1)/_MidDivCount))*2-_MidTotalUsedTime
+                    else:
+                        _MidTotalEtaTime = _MidEtaTime
                     # 进度比例
                     _MidProgressRate = round(50*(SamplePointIndex+1)/_MidDivCount)+(50 if ChannelIndex == 1 else 0)
                     self.Update.emit(str(_MidTotalUsedTime)[:-5],str(_MidTotalEtaTime)[:-5],_MidProgressRate)
