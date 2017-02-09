@@ -130,10 +130,12 @@ class EmiyaEngineCore(QtCore.QThread):
 
     def FinSaveFile(self):
         init(autoreset=True)
-        OutputFilePath = os.path.abspath(os.path.join(self.ReadyFilePath, os.pardir)) + "\\"
-        OutputFileName = OutputFilePath + 'Output_%s.wav' % uuid.uuid4().hex
-        librosa.output.write_wav(OutputFileName, self.AfterSignal, self.AfterSignalSR)
-        print(Back.GREEN + Fore.WHITE + "SAVE DONE" + Back.BLACK + " Output path -> " + OutputFileName)
+        SaveFilePath = self.OutputFilePath
+        if self.OutputFilePath == '':
+            SaveFilePath = os.path.abspath(os.path.join(self.ReadyFilePath, os.pardir)) + "\\"
+            OutputFileName = SaveFilePath + 'Output_%s.wav' % uuid.uuid4().hex
+        librosa.output.write_wav(SaveFilePath, self.AfterSignal, self.AfterSignalSR)
+        print(Back.GREEN + Fore.WHITE + "SAVE DONE" + Back.BLACK + " Output path -> " + SaveFilePath)
 
     def run(self):
         # 加载文件启动SRC
@@ -141,6 +143,8 @@ class EmiyaEngineCore(QtCore.QThread):
         self.MidUpSRC()
         # 初始化彩色命令行
         init(autoreset=True)
+        # 记录整个任务开始时间
+        _MidStartTimeGlobal = datetime.datetime.now()
         # 两个声道
         for ChannelIndex in range(2):
             # 记录开始时间
@@ -207,7 +211,14 @@ class EmiyaEngineCore(QtCore.QThread):
                     # 已消耗时间
                     _MidUsedTime = datetime.datetime.now()-_MidStartTime
                     # 估算剩余时间
-                    _MidEtaTime = ((datetime.datetime.now()-_MidStartTime)/((SamplePointIndex+1)/_MidDivCount))-_MidUsedTime
+                    _MidEtaTime = (_MidUsedTime/((SamplePointIndex+1)/_MidDivCount))-_MidUsedTime
+                    # 完整任务消耗时间
+                    _MidTotalUsedTime = datetime.datetime.now()-_MidStartTimeGlobal
+                    # 预计总消耗时间
+                    _MidTotalEtaTime = (_MidTotalUsedTime/((SamplePointIndex+1)/_MidDivCount))*2-_MidTotalUsedTime
+                    # 进度比例
+                    _MidProgressRate = round(50*(SamplePointIndex+1)/_MidDivCount)+(50 if ChannelIndex == 1 else 0)
+                    self.Update.emit(str(_MidTotalUsedTime)[:-5],str(_MidTotalEtaTime)[:-5],_MidProgressRate)
                     # 构造显示文本
                     if ChannelIndex == 0:
                         _TempArrayLeft = np.append(_TempArrayLeft, _EachPieceLeft)
@@ -217,8 +228,6 @@ class EmiyaEngineCore(QtCore.QThread):
                         _TempArrayRight = np.append(_TempArrayRight, _EachPieceRight)
                         if self.MidPrintProgress:
                             print("Right channel progress rate -> " + Fore.CYAN + str(SamplePointIndex) + " / " + str(_MidDivCount-1) + Fore.WHITE + " TIME USED -> " + Fore.YELLOW + str(_MidUsedTime) + Fore.WHITE + " ETA -> " + Fore.GREEN + str(_MidEtaTime))
-                    _MidProgressRate = round(100*(SamplePointIndex+1)/_MidDivCount)
-                    self.Update.emit(str(_MidUsedTime)[:-5],str(_MidEtaTime)[:-5],_MidProgressRate)
                 else:
                     _TempAppendCount = 0
                     if ChannelIndex == 0:
@@ -461,14 +470,23 @@ class EmiyaEngineGUI(object):
 
     def RunProcess(self):
         if not self.IsStarted:
+            self.InputFilePath = self.InputLineBox.text()
+            self.OutputFilePath = self.OutputLineBox.text()
             if self.InputFilePath and self.OutputFilePath:
                 self.IsStarted = True
                 self.StartButton.setText("停止处理")
-                
                 self.CoreObject=EmiyaEngineCore(None,self.InputFilePath,self.OutputFilePath,1,self.SplitSize,self.IsUseWindow)
                 self.CoreObject.Update.connect(self.UpdateState)
                 self.CoreObject.Finish.connect(self.DetectEnd)
                 self.CoreObject.start()
+        else:
+            self.IsStarted = False
+            self.StartButton.setText("开始处理")
+            self.CoreObject.terminate()
+            self.UsedTime.setText("00:00:00")
+            self.EtaTime.setText("00:00:00")
+            self.GlobalProgressBar.setValue(0)
+            print("所有处理已停止")
 
     def DetectEnd(self):
         self.IsStarted = False
