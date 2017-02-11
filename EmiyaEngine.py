@@ -27,13 +27,12 @@ logging.basicConfig(
         %(levelname)s %(message)s',
     datefmt='%a, %d %b %Y %H:%M:%S',
     filename='Emiya.log',
-    filemode='a+'
+    filemode='w+'
 )
 logger = logging.getLogger("EmiaLog")
-console = logging.StreamHandler()
-console.setLevel(logging.INFO)
-# add the handler to the root logger
-logger.addHandler(console)
+# console = logging.StreamHandler()
+# console.setLevel(logging.INFO)
+# logger.addHandler(console)
 
 
 class EmiyaEngineCore:
