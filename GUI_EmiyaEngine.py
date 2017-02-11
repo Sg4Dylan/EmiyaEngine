@@ -19,7 +19,7 @@ logging.basicConfig(
     format='%(asctime)s [line:%(lineno)d] \
         %(levelname)s %(message)s',
     datefmt='%a, %d %b %Y %H:%M:%S',
-    filename='EmiyaGUI.log',
+    filename='EmiyaEngineGUI.log',
     filemode='w+'
 )
 logger = logging.getLogger("EmiyaLog")
@@ -47,7 +47,7 @@ class EmiyaEngineCore(QtCore.QThread):
     AnalysisWindow = False  # 分析接续点用的单边FFT是否加窗
     MidSRCFalse = False     # SRC开关, 为True时就会取消掉SRC步骤
     MidPrint = False        # 打印细节日志开关
-    MidPrintProgress = True  # 打印进度信息
+    MidPrintProgress = True # 打印进度信息
 
     def __init__(self, parent, _InputFilePath, _OutputFilePath, _DebugSwitch, _SplitSize, _WindowSwitch):
         super(EmiyaEngineCore, self).__init__(parent)
@@ -97,19 +97,19 @@ class EmiyaEngineCore(QtCore.QThread):
             print("Signal max AMP -> %s" % _MidBaseFreqAmp)
         logger.debug("Signal max AMP -> %s" % _MidBaseFreqAmp)
         # Step1. 找出接续的阈值
-        _MidThresholdHit = 1.0e-11                                     # 方差判定阈值
-        _MidThresholdPoint = 0                                         # 最后的阈值点
-        _MidFindRange = int((_FFTPointCount/2)-1)                      # 搜索的范围
-        _MidStartFindPos = round(2000/(48000/(_FFTPointCount/2)))      # 从2K频点附近开始寻找，加快速度
-        _MidStartFlag = True                                           # 循环用的启动Flag
-        _MidLoopCount = 0                                              # 循环计数器
-        _MidLegalFreq = 22000                                          # 判定结果合法的阈值频率
-        _MidForwardFreq = 3000                                         # 前向修正频率
-        _MidOrderFreq = 16000                                          # 钦定频率
+        _MidThresholdHit = 1.0e-11                                                     # 方差判定阈值
+        _MidThresholdPoint = 0                                                         # 最后的阈值点
+        _MidFindRange = int((_FFTPointCount/2)-1)                                      # 搜索的范围
+        _MidStartFindPos = round(2000 / (self.BeforeSignalSR / (_FFTPointCount / 2)))  # 从2K频点附近开始寻找，加快速度
+        _MidStartFlag = True                                                           # 循环用的启动Flag
+        _MidLoopCount = 0                                                              # 循环计数器
+        _MidLegalFreq = (self.BeforeSignalSR / 2) - 500                                # 判定结果合法的阈值频率
+        _MidForwardFreq = 3000                                                         # 前向修正频率
+        _MidOrderFreq = (self.BeforeSignalSR / 2) - 6000                               # 钦定频率
         # Rev.1: 检查接续点是否符合常理
-        while _MidStartFlag or _MidThresholdPoint > round(_MidLegalFreq / (48000 / (_FFTPointCount / 2))):
+        while _MidStartFlag or _MidThresholdPoint > round(_MidLegalFreq / (self.BeforeSignalSR / (_FFTPointCount / 2))):
             _MidStartFlag = False
-            if (_MidThresholdPoint * (48000 / (_FFTPointCount / 2))) > int(self.BeforeSignalSR / 2):
+            if (_MidThresholdPoint * (self.BeforeSignalSR / (_FFTPointCount / 2))) > int(self.BeforeSignalSR / 2):
                 _MidThresholdHit *= 2
             for i in range(_MidStartFindPos, _MidFindRange):
                 if i + 5 > _MidFindRange:
@@ -118,24 +118,24 @@ class EmiyaEngineCore(QtCore.QThread):
                 if np.var(_MidAmpData[i:i + 4]) < _MidThresholdHit and \
                    np.var(_MidAmpData[i + 1:i + 5]) < _MidThresholdHit:
                     # 定位到当前位置的前500Hz位置
-                    _MidThresholdPoint = i - round(_MidForwardFreq / (48000 / (_FFTPointCount / 2)))
+                    _MidThresholdPoint = i - round(_MidForwardFreq / (self.BeforeSignalSR / (_FFTPointCount / 2)))
                     break
-            # 错误超过5把就强行钦定频率为18K
+            # 错误超过5把就强行钦定频率
             _MidLoopCount += 1
             if _MidLoopCount > 5:
-                _MidThresholdPoint = round(_MidOrderFreq / (48000 / (_FFTPointCount / 2)))
+                _MidThresholdPoint = round(_MidOrderFreq / (self.BeforeSignalSR / (_FFTPointCount / 2)))
                 break
         # 打印函数返回信息
         if self.MidPrint:
             print("Signal threshold point -> %s @ %sHz  Max Amp -> %s" % (_MidThresholdPoint,
                                                                           _MidThresholdPoint *
-                                                                          (48000 / (_MidFindRange + 1)),
+                                                                          (self.BeforeSignalSR / (_MidFindRange + 1)),
                                                                           _MidBaseFreqAmp))
-        logger.debug("Signal threshold point -> %s @ %sHz  Max Amp -> %s" % (_MidThresholdPoint,
-                                                                             _MidThresholdPoint *
-                                                                             (48000 / (_MidFindRange + 1)),
-                                                                             _MidBaseFreqAmp))
-        # _MidThresholdPoint = round(21000/(48000/(_FFTPointCount/2)))
+        logger.debug("Signal threshold point -> %s @ %sHz Max Amp -> %s" % (_MidThresholdPoint,
+                                                                            _MidThresholdPoint *
+                                                                            (self.BeforeSignalSR / (_MidFindRange + 1)),
+                                                                            _MidBaseFreqAmp))
+        # _MidThresholdPoint = round(21000/(self.BeforeSignalSR/(_FFTPointCount/2)))
         return _MidBaseFreqAmp, _MidThresholdPoint
 
     def MidInsertJitter(self, _MidFFTResultDouble, _FFTPointCount, _MidThresholdPoint, _MidBaseFreqAmp):
