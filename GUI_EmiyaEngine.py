@@ -9,8 +9,24 @@ import numpy as np
 import scipy
 import librosa
 import resampy
+import logging
 from colorama import Fore, Back, init
 from PyQt5 import QtCore, QtGui, QtWidgets
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s [line:%(lineno)d] \
+        %(levelname)s %(message)s',
+    datefmt='%a, %d %b %Y %H:%M:%S',
+    filename='Emiya.log',
+    filemode='a+'
+)
+logger = logging.getLogger("EmiaLog")
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+# add the handler to the root logger
+logger.addHandler(console)
+
 
 class EmiyaEngineCore(QtCore.QThread):
 
@@ -31,9 +47,9 @@ class EmiyaEngineCore(QtCore.QThread):
     AnalysisWindow = False  # 分析接续点用的单边FFT是否加窗
     MidSRCFalse = False     # SRC开关, 为True时就会取消掉SRC步骤
     MidPrint = False        # 打印细节日志开关
-    MidPrintProgress = True # 打印进度信息
+    MidPrintProgress = True  # 打印进度信息
 
-    def __init__(self,parent,_InputFilePath,_OutputFilePath,_DebugSwitch,_SplitSize,_WindowSwitch):
+    def __init__(self, parent, _InputFilePath, _OutputFilePath, _DebugSwitch, _SplitSize, _WindowSwitch):
         super(EmiyaEngineCore, self).__init__(parent)
         # QtCore.QThread.__init__(self,parent)
         self.ReadyFilePath = _InputFilePath
@@ -53,26 +69,30 @@ class EmiyaEngineCore(QtCore.QThread):
         self.BeforeSignal, self.BeforeSignalSR = librosa.load(self.ReadyFilePath, sr=None, mono=False)
         self.AfterSignalLeft = np.array([()])
         self.AfterSignalRight = np.array([()])
-        print("Load signal complete. ChannelCount: %s SampleRate: %s Hz" % (str(len(self.BeforeSignal)), str(self.BeforeSignalSR)))
+        # print("Load signal complete. ChannelCount: %s SampleRate: %s Hz" % (str(len(self.BeforeSignal)), str(self.BeforeSignalSR)))
+        logger.info("Load signal complete. ChannelCount: %s SampleRate: %s Hz" % (str(len(self.BeforeSignal)), str(self.BeforeSignalSR)))
 
     def MidUpSRC(self):
         # 重采样loss样本到96K
-        print("Please wait for SRC.")
+        # print("Please wait for SRC.")
+        logger.info("Please wait for SRC.")
         self.MidSignalSR = 96000
         self.AfterSignalSR = self.MidSignalSR
         if self.MidSRCFalse:
             self.MidSignal = self.BeforeSignal
         else:
             self.MidSignal = resampy.resample(self.BeforeSignal, self.BeforeSignalSR, self.MidSignalSR, filter='kaiser_best')
-        print("Signal SRC complete.")
+        # print("Signal SRC complete.")
+        logger.info("Signal SRC complete.")
 
-    def MidFindThresholdPoint(self,_MidFFTResultSingle,_FFTPointCount):
+    def MidFindThresholdPoint(self, _MidFFTResultSingle, _FFTPointCount):
         # 鉴定频谱基本参数
         _MidAmpData = abs(_MidFFTResultSingle[range(_FFTPointCount//2)])
         # Step0. 找出基波幅度
         _MidBaseFreqAmp = _MidAmpData.max()
         if self.MidPrint:
-            print("Signal max AMP -> %s" % _MidBaseFreqAmp)
+            # print("Signal max AMP -> %s" % _MidBaseFreqAmp)
+            logger.debug("Signal max AMP -> %s" % _MidBaseFreqAmp)
         # Step1. 找出接续的阈值
         _MidThresholdHit = 1.0e-11                                     # 方差判定阈值
         _MidThresholdPoint = 0                                         # 最后的阈值点
@@ -84,39 +104,40 @@ class EmiyaEngineCore(QtCore.QThread):
         _MidForwardFreq = 3000                                         # 前向修正频率
         _MidOrderFreq = 16000                                          # 钦定频率
         # Rev.1: 检查接续点是否符合常理
-        while _MidStartFlag or _MidThresholdPoint>round(_MidLegalFreq/(48000/(_FFTPointCount/2))):
+        while _MidStartFlag or _MidThresholdPoint > round(_MidLegalFreq / (48000 / (_FFTPointCount / 2))):
             _MidStartFlag = False
-            if (_MidThresholdPoint*(48000/(_FFTPointCount/2))) > int(self.BeforeSignalSR/2):
+            if (_MidThresholdPoint * (48000 / (_FFTPointCount / 2))) > int(self.BeforeSignalSR / 2):
                 _MidThresholdHit *= 2
-            for i in range(_MidStartFindPos,_MidFindRange):
-                if i+5>_MidFindRange:
+            for i in range(_MidStartFindPos, _MidFindRange):
+                if i + 5 > _MidFindRange:
                     break
                 # 计算连续五个采样*3 的方差，与阈值比较，判断频谱消失的位置
-                if np.var(_MidAmpData[i:i+4]) < _MidThresholdHit and \
-                   np.var(_MidAmpData[i+1:i+5]) < _MidThresholdHit:
+                if np.var(_MidAmpData[i:i + 4]) < _MidThresholdHit and \
+                   np.var(_MidAmpData[i + 1:i + 5]) < _MidThresholdHit:
                     # 定位到当前位置的前500Hz位置
-                    _MidThresholdPoint = i-round(_MidForwardFreq/(48000/(_FFTPointCount/2)))
+                    _MidThresholdPoint = i - round(_MidForwardFreq / (48000 / (_FFTPointCount / 2)))
                     break
             # 错误超过5把就强行钦定频率为18K
             _MidLoopCount += 1
             if _MidLoopCount > 5:
-                _MidThresholdPoint = round(_MidOrderFreq/(48000/(_FFTPointCount/2)))
+                _MidThresholdPoint = round(_MidOrderFreq / (48000 / (_FFTPointCount / 2)))
                 break
         # 打印函数返回信息
         if self.MidPrint:
-            print("Signal threshold point -> %s @ %sHz  Max Amp -> %s" % (_MidThresholdPoint,_MidThresholdPoint*(48000/(_MidFindRange+1)),_MidBaseFreqAmp))
+            # print("Signal threshold point -> %s @ %sHz  Max Amp -> %s" % (_MidThresholdPoint, _MidThresholdPoint * (48000 / (_MidFindRange + 1)), _MidBaseFreqAmp))
+            logger.debug("Signal threshold point -> %s @ %sHz  Max Amp -> %s" % (_MidThresholdPoint, _MidThresholdPoint * (48000 / (_MidFindRange + 1)), _MidBaseFreqAmp))
         # _MidThresholdPoint = round(21000/(48000/(_FFTPointCount/2)))
         return _MidBaseFreqAmp, _MidThresholdPoint
 
-    def MidInsertJitter(self,_MidFFTResultDouble,_FFTPointCount,_MidThresholdPoint,_MidBaseFreqAmp):
+    def MidInsertJitter(self, _MidFFTResultDouble, _FFTPointCount, _MidThresholdPoint, _MidBaseFreqAmp):
         # 构造抖动
         if _MidThresholdPoint <= 0:
             return _MidFFTResultDouble
-        for i in range(_MidThresholdPoint,_FFTPointCount-_MidThresholdPoint):
+        for i in range(_MidThresholdPoint, _FFTPointCount - _MidThresholdPoint):
             # Rev.0: 调整生成概率，频率越高概率越低
             # Rev.1: 加入幅值判定，幅度越大概率越大
             _GenPossible = abs((_FFTPointCount/2)-i)/((_FFTPointCount/2)-_MidThresholdPoint)*(_MidBaseFreqAmp/0.22)
-            if random.randint(0, 1000000) < 800000 * _GenPossible: # 0<=x<=10
+            if random.randint(0, 1000000) < 800000 * _GenPossible:  # 0<=x<=10
                 _MidRealValue = abs(_MidFFTResultDouble.real[i])
                 _BaseJitterMin = _MidRealValue * 0.5 * (1-_GenPossible)
                 _BaseJitterMax = _MidRealValue * 6 * _GenPossible
@@ -124,7 +145,7 @@ class EmiyaEngineCore(QtCore.QThread):
                 _AmpJitterMax = _MidBaseFreqAmp * _MidRealValue * 2
                 _AmpJitterPrefix = -1 if random.randint(0, 100000) < 50000 else 1
                 _MiditterPrefix = -1 if random.randint(0, 100000) < 50000 else 1
-                _MidDeltaJitterValue = random.uniform(_BaseJitterMin,_BaseJitterMax) + _AmpJitterPrefix * random.uniform(_AmpJitterMin,_AmpJitterMax)
+                _MidDeltaJitterValue = random.uniform(_BaseJitterMin, _BaseJitterMax) + _AmpJitterPrefix * random.uniform(_AmpJitterMin, _AmpJitterMax)
                 _MidFFTResultDouble.real[i] += _MiditterPrefix * _MidDeltaJitterValue
         return _MidFFTResultDouble
 
@@ -135,7 +156,8 @@ class EmiyaEngineCore(QtCore.QThread):
             SaveFilePath = os.path.abspath(os.path.join(self.ReadyFilePath, os.pardir)) + "\\"
             OutputFileName = SaveFilePath + 'Output_%s.wav' % uuid.uuid4().hex
         librosa.output.write_wav(SaveFilePath, self.AfterSignal, self.AfterSignalSR)
-        print(Back.GREEN + Fore.WHITE + "SAVE DONE" + Back.BLACK + " Output path -> " + SaveFilePath)
+        # print(Back.GREEN + Fore.WHITE + "SAVE DONE" + Back.BLACK + " Output path -> " + SaveFilePath)
+        logger.info(Back.GREEN + Fore.WHITE + "SAVE DONE" + Back.BLACK + " Output path -> " + SaveFilePath)
 
     def run(self):
         # 加载文件启动SRC
@@ -152,7 +174,7 @@ class EmiyaEngineCore(QtCore.QThread):
             # 信号总长度
             _MidSignalLength = len(self.MidSignal[ChannelIndex])
             # FFT分割数量
-            _FFTPointCount = 1024 # 至少2048点，避免计算错误
+            _FFTPointCount = 1024  # 至少2048点，避免计算错误
             _MidDivCount = math.floor(_MidSignalLength/_FFTPointCount)
             # 实际重叠操作数量 = FFT分割数量 * 分块次数
             _EachLength = 512
@@ -184,21 +206,22 @@ class EmiyaEngineCore(QtCore.QThread):
                     # 执行FFT运算, 单边谱用于分析, 双边谱用于处理
                     if self.AnalysisWindow:
                         _TempSignal *= scipy.signal.hann(_FFTPointCount, sym=0)
-                    _MidFFTResultDouble = np.fft.fft(_TempSignal,_FFTPointCount)/(_FFTPointCount)
-                    _MidFFTResultSingle = np.fft.fft(_TempSignal,_FFTPointCount)/(_FFTPointCount/2)
+                    _MidFFTResultDouble = np.fft.fft(_TempSignal, _FFTPointCount) / (_FFTPointCount)
+                    _MidFFTResultSingle = np.fft.fft(_TempSignal, _FFTPointCount) / (_FFTPointCount / 2)
                     # 获取当前分段最大振幅, 处理阈值点
-                    _MidBaseFreqAmp, _MidThresholdPoint = self.MidFindThresholdPoint(_MidFFTResultSingle,_FFTPointCount)
+                    _MidBaseFreqAmp, _MidThresholdPoint = self.MidFindThresholdPoint(_MidFFTResultSingle, _FFTPointCount)
                     # 构造抖动到当前FFT实际值上
-                    _MidFFTAfterJitter = self.MidInsertJitter(_MidFFTResultDouble,_FFTPointCount,_MidThresholdPoint,_MidBaseFreqAmp)
+                    _MidFFTAfterJitter = self.MidInsertJitter(_MidFFTResultDouble, _FFTPointCount, _MidThresholdPoint, _MidBaseFreqAmp)
                     # 逆变换IFFT
-                    _MidTimerDomSignal = np.fft.ifft(_MidFFTAfterJitter,n=_FFTPointCount)
+                    _MidTimerDomSignal = np.fft.ifft(_MidFFTAfterJitter, n=_FFTPointCount)
                     # 接续到新信号上
                     _AppendLength = _EachLength
                     if SuffixFlag:
                         _AppendLength = _FFTPointCount-SuffixLength
                     _MidAppendSignal = _MidTimerDomSignal[0:_AppendLength]
                     if self.MidPrint:
-                        print("Per each length -> %s" % len(_MidAppendSignal))
+                        # print("Per each length -> %s" % len(_MidAppendSignal))
+                        logger.debug("Per each length -> %s" % len(_MidAppendSignal))
                     if ChannelIndex == 0:
                         _EachPieceLeft = np.append(_EachPieceLeft, _MidAppendSignal)
                     else:
@@ -220,17 +243,19 @@ class EmiyaEngineCore(QtCore.QThread):
                     else:
                         _MidTotalEtaTime = _MidEtaTime
                     # 进度比例
-                    _MidProgressRate = round(50*(SamplePointIndex+1)/_MidDivCount)+(50 if ChannelIndex == 1 else 0)
-                    self.Update.emit(str(_MidTotalUsedTime)[:-5],str(_MidTotalEtaTime)[:-5],_MidProgressRate)
+                    _MidProgressRate = round(50 * (SamplePointIndex + 1) / _MidDivCount) + (50 if ChannelIndex == 1 else 0)
+                    self.Update.emit(str(_MidTotalUsedTime)[:-5], str(_MidTotalEtaTime)[:-5], _MidProgressRate)
                     # 构造显示文本
                     if ChannelIndex == 0:
                         _TempArrayLeft = np.append(_TempArrayLeft, _EachPieceLeft)
                         if self.MidPrintProgress:
-                            print("Left channel progress rate -> " + Fore.CYAN + str(SamplePointIndex) + " / " + str(_MidDivCount-1) + Fore.WHITE + " TIME USED -> " + Fore.YELLOW + str(_MidUsedTime) + Fore.WHITE + " ETA -> " + Fore.GREEN + str(_MidEtaTime))
+                            # print("Left channel progress rate -> " + Fore.CYAN + str(SamplePointIndex) + " / " + str(_MidDivCount-1) + Fore.WHITE + " TIME USED -> " + Fore.YELLOW + str(_MidUsedTime) + Fore.WHITE + " ETA -> " + Fore.GREEN + str(_MidEtaTime))
+                            logger.info("Left channel progress rate -> " + Fore.CYAN + str(SamplePointIndex) + " / " + str(_MidDivCount-1) + Fore.WHITE + " TIME USED -> " + Fore.YELLOW + str(_MidUsedTime) + Fore.WHITE + " ETA -> " + Fore.GREEN + str(_MidEtaTime))
                     else:
                         _TempArrayRight = np.append(_TempArrayRight, _EachPieceRight)
                         if self.MidPrintProgress:
-                            print("Right channel progress rate -> " + Fore.CYAN + str(SamplePointIndex) + " / " + str(_MidDivCount-1) + Fore.WHITE + " TIME USED -> " + Fore.YELLOW + str(_MidUsedTime) + Fore.WHITE + " ETA -> " + Fore.GREEN + str(_MidEtaTime))
+                            # print("Right channel progress rate -> " + Fore.CYAN + str(SamplePointIndex) + " / " + str(_MidDivCount-1) + Fore.WHITE + " TIME USED -> " + Fore.YELLOW + str(_MidUsedTime) + Fore.WHITE + " ETA -> " + Fore.GREEN + str(_MidEtaTime))
+                            logger.info("Right channel progress rate -> " + Fore.CYAN + str(SamplePointIndex) + " / " + str(_MidDivCount-1) + Fore.WHITE + " TIME USED -> " + Fore.YELLOW + str(_MidUsedTime) + Fore.WHITE + " ETA -> " + Fore.GREEN + str(_MidEtaTime))
                 else:
                     _TempAppendCount = 0
                     if ChannelIndex == 0:
@@ -249,18 +274,18 @@ class EmiyaEngineCore(QtCore.QThread):
 
 
 class EmiyaEngineGUI(object):
-    
+
     ''' Emiya Engine GUI ARGS '''
-    
+
     InputFilePath = ''
     OutputFilePath = ''
     IsUseWindow = False
     SplitSize = 500
     IsStarted = False
     SubCore = QtCore.pyqtSignal()
-    
+
     def __init__(self, MainWindow):
-        
+
         MainWindow.setObjectName("MainWindow")
         MainWindow.resize(615, 272)
         MainWindow.setMinimumSize(QtCore.QSize(615, 272))
@@ -272,7 +297,7 @@ class EmiyaEngineGUI(object):
         MainWindow.setWindowTitle("Emiya Engine - 只要蘊藏著想成為真物的意志, 偽物就比真物還要來得真實")
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
-        
+
         self.Input_Label = QtWidgets.QLabel(self.centralwidget)
         self.Input_Label.setGeometry(QtCore.QRect(20, 20, 101, 16))
         font = QtGui.QFont()
@@ -280,7 +305,7 @@ class EmiyaEngineGUI(object):
         font.setPointSize(11)
         self.Input_Label.setFont(font)
         self.Input_Label.setObjectName("Input_Label")
-        
+
         self.InputLineBox = QtWidgets.QLineEdit(self.centralwidget)
         self.InputLineBox.setGeometry(QtCore.QRect(130, 20, 401, 21))
         font = QtGui.QFont()
@@ -288,7 +313,7 @@ class EmiyaEngineGUI(object):
         font.setPointSize(10)
         self.InputLineBox.setFont(font)
         self.InputLineBox.setObjectName("InputLineBox")
-        
+
         self.InputButton = QtWidgets.QPushButton(self.centralwidget)
         self.InputButton.setGeometry(QtCore.QRect(540, 20, 51, 21))
         font = QtGui.QFont()
@@ -297,7 +322,7 @@ class EmiyaEngineGUI(object):
         self.InputButton.setFont(font)
         self.InputButton.setObjectName("InputButton")
         self.InputButton.clicked.connect(self.SetInputFilePath)
-        
+
         self.OutputLineBox = QtWidgets.QLineEdit(self.centralwidget)
         self.OutputLineBox.setGeometry(QtCore.QRect(130, 50, 401, 21))
         font = QtGui.QFont()
@@ -305,7 +330,7 @@ class EmiyaEngineGUI(object):
         font.setPointSize(10)
         self.OutputLineBox.setFont(font)
         self.OutputLineBox.setObjectName("OutputLineBox")
-        
+
         self.OutputButton = QtWidgets.QPushButton(self.centralwidget)
         self.OutputButton.setGeometry(QtCore.QRect(540, 50, 51, 21))
         font = QtGui.QFont()
@@ -314,7 +339,7 @@ class EmiyaEngineGUI(object):
         self.OutputButton.setFont(font)
         self.OutputButton.setObjectName("OutputButton")
         self.OutputButton.clicked.connect(self.SetOutputFilePath)
-        
+
         self.Output_Label = QtWidgets.QLabel(self.centralwidget)
         self.Output_Label.setGeometry(QtCore.QRect(20, 50, 101, 16))
         font = QtGui.QFont()
@@ -322,7 +347,7 @@ class EmiyaEngineGUI(object):
         font.setPointSize(11)
         self.Output_Label.setFont(font)
         self.Output_Label.setObjectName("Output_Label")
-        
+
         self.IsUseWindowCheck = QtWidgets.QCheckBox(self.centralwidget)
         self.IsUseWindowCheck.setGeometry(QtCore.QRect(50, 90, 181, 31))
         font = QtGui.QFont()
@@ -332,7 +357,7 @@ class EmiyaEngineGUI(object):
         self.IsUseWindowCheck.setChecked(False)
         self.IsUseWindowCheck.setObjectName("IsUseWindowCheck")
         self.IsUseWindowCheck.stateChanged.connect(self.SetIsUseWindowCheck)
-        
+
         self.SplitSizeSpin = QtWidgets.QSpinBox(self.centralwidget)
         self.SplitSizeSpin.setGeometry(QtCore.QRect(350, 90, 71, 31))
         self.SplitSizeSpin.setMinimum(100)
@@ -341,7 +366,7 @@ class EmiyaEngineGUI(object):
         self.SplitSizeSpin.setProperty("value", 500)
         self.SplitSizeSpin.setObjectName("SplitSizeSpin")
         self.SplitSizeSpin.valueChanged.connect(self.SetSplitSize)
-        
+
         self.SplitSize_Label = QtWidgets.QLabel(self.centralwidget)
         self.SplitSize_Label.setGeometry(QtCore.QRect(250, 90, 91, 31))
         font = QtGui.QFont()
@@ -349,7 +374,7 @@ class EmiyaEngineGUI(object):
         font.setPointSize(11)
         self.SplitSize_Label.setFont(font)
         self.SplitSize_Label.setObjectName("SplitSize_Label")
-        
+
         self.StartButton = QtWidgets.QPushButton(self.centralwidget)
         self.StartButton.setGeometry(QtCore.QRect(460, 90, 91, 31))
         font = QtGui.QFont()
@@ -358,11 +383,11 @@ class EmiyaEngineGUI(object):
         self.StartButton.setFont(font)
         self.StartButton.setObjectName("StartButton")
         self.StartButton.clicked.connect(self.RunProcess)
-        
+
         self.groupBox = QtWidgets.QGroupBox(self.centralwidget)
         self.groupBox.setGeometry(QtCore.QRect(20, 130, 571, 101))
         self.groupBox.setObjectName("groupBox")
-        
+
         self.UsedTime_Label = QtWidgets.QLabel(self.groupBox)
         self.UsedTime_Label.setGeometry(QtCore.QRect(30, 30, 101, 16))
         font = QtGui.QFont()
@@ -370,12 +395,12 @@ class EmiyaEngineGUI(object):
         font.setPointSize(11)
         self.UsedTime_Label.setFont(font)
         self.UsedTime_Label.setObjectName("UsedTime_Label")
-        
+
         self.GlobalProgressBar = QtWidgets.QProgressBar(self.groupBox)
         self.GlobalProgressBar.setGeometry(QtCore.QRect(100, 60, 451, 23))
         self.GlobalProgressBar.setProperty("value", 0)
         self.GlobalProgressBar.setObjectName("GlobalProgressBar")
-        
+
         self.GlobalProgressBar_Label = QtWidgets.QLabel(self.groupBox)
         self.GlobalProgressBar_Label.setGeometry(QtCore.QRect(30, 60, 61, 21))
         font = QtGui.QFont()
@@ -383,25 +408,25 @@ class EmiyaEngineGUI(object):
         font.setPointSize(11)
         self.GlobalProgressBar_Label.setFont(font)
         self.GlobalProgressBar_Label.setObjectName("GlobalProgressBar_Label")
-        
+
         self.UsedTime = QtWidgets.QLabel(self.groupBox)
         self.UsedTime.setGeometry(QtCore.QRect(150, 30, 101, 16))
         font = QtGui.QFont()
         font.setFamily("微软雅黑")
         font.setPointSize(11)
         self.UsedTime.setFont(font)
-        self.UsedTime.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
+        self.UsedTime.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignTrailing | QtCore.Qt.AlignVCenter)
         self.UsedTime.setObjectName("UsedTime")
-        
+
         self.EtaTime = QtWidgets.QLabel(self.groupBox)
         self.EtaTime.setGeometry(QtCore.QRect(410, 30, 91, 16))
         font = QtGui.QFont()
         font.setFamily("微软雅黑")
         font.setPointSize(11)
         self.EtaTime.setFont(font)
-        self.EtaTime.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
+        self.EtaTime.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignTrailing | QtCore.Qt.AlignVCenter)
         self.EtaTime.setObjectName("EtaTime")
-        
+
         self.EtaTime_Label = QtWidgets.QLabel(self.groupBox)
         self.EtaTime_Label.setGeometry(QtCore.QRect(290, 30, 101, 16))
         font = QtGui.QFont()
@@ -409,7 +434,7 @@ class EmiyaEngineGUI(object):
         font.setPointSize(11)
         self.EtaTime_Label.setFont(font)
         self.EtaTime_Label.setObjectName("EtaTime_Label")
-        
+
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(MainWindow)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 615, 22))
@@ -429,7 +454,6 @@ class EmiyaEngineGUI(object):
 
         self.TextedUI(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
-        
 
     def TextedUI(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
@@ -450,13 +474,12 @@ class EmiyaEngineGUI(object):
         self.menu_F.setTitle(_translate("MainWindow", "文件(&F)"))
         self.action_OpenFile.setText(_translate("MainWindow", "打开(&O)"))
         self.action_Exit.setText(_translate("MainWindow", "退出(&E)"))
-        
 
     def SetInputFilePath(self):
         self.InputFilePath = str(QtWidgets.QFileDialog.getOpenFileName(None, "选择待处理的文件")[0])
         if self.InputFilePath:
             self.InputLineBox.setText(self.InputFilePath)
-    
+
     def SetOutputFilePath(self):
         self.OutputFilePath = str(QtWidgets.QFileDialog.getSaveFileName(None, "设置输出文件的位置及文件名")[0])
         if self.OutputFilePath:
@@ -478,7 +501,7 @@ class EmiyaEngineGUI(object):
             if self.InputFilePath and self.OutputFilePath:
                 self.IsStarted = True
                 self.StartButton.setText("停止处理")
-                self.CoreObject=EmiyaEngineCore(None,self.InputFilePath,self.OutputFilePath,1,self.SplitSize,self.IsUseWindow)
+                self.CoreObject = EmiyaEngineCore(None, self.InputFilePath, self.OutputFilePath, 1, self.SplitSize, self.IsUseWindow)
                 self.CoreObject.Update.connect(self.UpdateState)
                 self.CoreObject.Finish.connect(self.DetectEnd)
                 self.CoreObject.start()
@@ -489,13 +512,14 @@ class EmiyaEngineGUI(object):
             self.UsedTime.setText("00:00:00")
             self.EtaTime.setText("00:00:00")
             self.GlobalProgressBar.setValue(0)
-            print("所有处理已停止")
+            # print("所有处理已停止")
+            logger.info("所有处理已停止")
 
     def DetectEnd(self):
         self.IsStarted = False
         self.StartButton.setText("开始处理")
 
-    def UpdateState(self,_TimeUsed,_EtaTime,_ProgressRate):
+    def UpdateState(self, _TimeUsed, _EtaTime, _ProgressRate):
         self.UsedTime.setText(str(_TimeUsed))
         self.EtaTime.setText(str(_EtaTime))
         self.GlobalProgressBar.setValue(_ProgressRate)
@@ -509,4 +533,3 @@ if __name__ == "__main__":
     # ui.setupUi(MainWindow)
     MainWindow.show()
     sys.exit(app.exec_())
-
