@@ -29,7 +29,7 @@ logging.basicConfig(
     filename='Emiya.log',
     filemode='w+'
 )
-logger = logging.getLogger("EmiaLog")
+logger = logging.getLogger("EmiyaLog")
 # console = logging.StreamHandler()
 # console.setLevel(logging.INFO)
 # logger.addHandler(console)
@@ -50,7 +50,7 @@ class EmiyaEngineCore:
     AnalysisWindow = False  # 分析接续点用的单边FFT是否加窗
     MidSRCFalse = False     # SRC开关, 为True时就会取消掉SRC步骤
     MidPrint = False        # 打印细节日志开关
-    MidPrintProgress = True  # 打印进度信息
+    MidPrintProgress = True # 打印进度信息
 
     def __init__(self, _InputFilePath, _DebugSwitch, _SplitSize, _WindowSwitch):
         # 输入样本:
@@ -76,8 +76,8 @@ class EmiyaEngineCore:
             self.ReadyFilePath, sr=None, mono=False)
         self.AfterSignalLeft = np.array([()])
         self.AfterSignalRight = np.array([()])
-        # print("Load signal complete. ChannelCount: %s SampleRate: %s Hz" %
-        #       (str(len(self.BeforeSignal)), str(self.BeforeSignalSR)))
+        print("Load signal complete. ChannelCount: %s SampleRate: %s Hz" % (
+            str(len(self.BeforeSignal)), str(self.BeforeSignalSR)))
         logger.info("Load signal complete. ChannelCount: %s SampleRate: %s Hz" % (
             str(len(self.BeforeSignal)), str(self.BeforeSignalSR)))
 
@@ -92,7 +92,7 @@ class EmiyaEngineCore:
         else:
             self.MidSignal = resampy.resample(
                 self.BeforeSignal, self.BeforeSignalSR, self.MidSignalSR, filter='kaiser_best')
-        # print("Signal SRC complete.")
+        print("Signal SRC complete.")
         logging.info("Signal SRC complete.")
 
     def MidFindThresholdPoint(self, _MidFFTResultSingle, _FFTPointCount):
@@ -101,15 +101,13 @@ class EmiyaEngineCore:
         # Step0. 找出基波幅度
         _MidBaseFreqAmp = _MidAmpData.max()
         if self.MidPrint:
-            # print("Signal max AMP -> %s" % _MidBaseFreqAmp)
-            logger.debug("Signal max AMP -> %s" % _MidBaseFreqAmp)
+            print("Signal max AMP -> %s" % _MidBaseFreqAmp)
+        logger.debug("Signal max AMP -> %s" % _MidBaseFreqAmp)
         # Step1. 找出接续的阈值
         _MidThresholdHit = 1.0e-11                                     # 方差判定阈值
         _MidThresholdPoint = 0                                         # 最后的阈值点
-        _MidFindRange = int((_FFTPointCount / 2) -
-                            1)                      # 搜索的范围
-        _MidStartFindPos = round(
-            2000 / (48000 / (_FFTPointCount / 2)))      # 从2K频点附近开始寻找，加快速度
+        _MidFindRange = int((_FFTPointCount / 2) - 1)                  # 搜索的范围
+        _MidStartFindPos = round(2000 / (48000 / (_FFTPointCount / 2)))# 从2K频点附近开始寻找，加快速度
         _MidStartFlag = True                                           # 循环用的启动Flag
         _MidLoopCount = 0                                              # 循环计数器
         _MidLegalFreq = 22000                                          # 判定结果合法的阈值频率
@@ -127,8 +125,7 @@ class EmiyaEngineCore:
                 if np.var(_MidAmpData[i:i + 4]) < _MidThresholdHit and \
                    np.var(_MidAmpData[i + 1:i + 5]) < _MidThresholdHit:
                     # 定位到当前位置的前500Hz位置
-                    _MidThresholdPoint = i - \
-                        round(_MidForwardFreq / (48000 / (_FFTPointCount / 2)))
+                    _MidThresholdPoint = i - round(_MidForwardFreq / (48000 / (_FFTPointCount / 2)))
                     break
             # 错误超过5把就强行钦定频率为18K
             _MidLoopCount += 1
@@ -138,10 +135,14 @@ class EmiyaEngineCore:
                 break
         # 打印函数返回信息
         if self.MidPrint:
-            # print("Signal threshold point -> %s @ %sHz  Max Amp -> %s" % (_MidThresholdPoint,
-            #                                                               _MidThresholdPoint * (48000 / (_MidFindRange + 1)), _MidBaseFreqAmp))
-            logger.debug("Signal threshold point -> %s @ %sHz  Max Amp -> %s" % (_MidThresholdPoint,
-                                                                          _MidThresholdPoint * (48000 / (_MidFindRange + 1)), _MidBaseFreqAmp))
+            print("Signal threshold point -> %s @ %sHz  Max Amp -> %s" % (_MidThresholdPoint,
+                                                                          _MidThresholdPoint *
+                                                                          (48000 / (_MidFindRange + 1)),
+                                                                          _MidBaseFreqAmp))
+        logger.debug("Signal threshold point -> %s @ %sHz  Max Amp -> %s" % (_MidThresholdPoint,
+                                                                             _MidThresholdPoint *
+                                                                             (48000 / (_MidFindRange + 1)),
+                                                                             _MidBaseFreqAmp))
         # _MidThresholdPoint = round(21000/(48000/(_FFTPointCount/2)))
         return _MidBaseFreqAmp, _MidThresholdPoint
 
@@ -266,34 +267,35 @@ class EmiyaEngineCore:
                         _TempArrayLeft = np.append(
                             _TempArrayLeft, _EachPieceLeft)
                         if self.MidPrintProgress:
-                            # print("Left channel progress rate -> " + Fore.CYAN + str(SamplePointIndex) + " / " + str(_MidDivCount - 1) + Fore.WHITE +
-                            #       " TIME USED -> " + Fore.YELLOW + str(_MidUsedTime) + Fore.WHITE + " ETA -> " + Fore.GREEN + str(_MidEtaTime))
-                            logger.info("Left channel progress rate -> " + Fore.CYAN + str(SamplePointIndex) + " / " + str(_MidDivCount - 1) + Fore.WHITE +
-                                  " TIME USED -> " + Fore.YELLOW + str(_MidUsedTime) + Fore.WHITE + " ETA -> " + Fore.GREEN + str(_MidEtaTime))
+                            print("Left channel progress rate -> " + Fore.CYAN + str(SamplePointIndex) + " / " +
+                                  str(_MidDivCount - 1) + Fore.WHITE + " TIME USED -> " + Fore.YELLOW +
+                                  str(_MidUsedTime) + Fore.WHITE + " ETA -> " + Fore.GREEN + str(_MidEtaTime))
+                        logger.info("Left channel progress rate -> " + str(SamplePointIndex) + " / " +
+                                    str(_MidDivCount - 1) + " TIME USED -> " +
+                                    str(_MidUsedTime) + " ETA -> " + str(_MidEtaTime))
                     else:
                         _TempArrayRight = np.append(
                             _TempArrayRight, _EachPieceRight)
                         if self.MidPrintProgress:
-                            # print("Right channel progress rate -> " + Fore.CYAN + str(SamplePointIndex) + " / " + str(_MidDivCount - 1) + Fore.WHITE +
-                            #       " TIME USED -> " + Fore.YELLOW + str(_MidUsedTime) + Fore.WHITE + " ETA -> " + Fore.GREEN + str(_MidEtaTime))
-                            logger.info("Right channel progress rate -> " + Fore.CYAN + str(SamplePointIndex) + " / " + str(_MidDivCount - 1) + Fore.WHITE +
-                                  " TIME USED -> " + Fore.YELLOW + str(_MidUsedTime) + Fore.WHITE + " ETA -> " + Fore.GREEN + str(_MidEtaTime))
+                            print("Right channel progress rate -> " + Fore.CYAN + str(SamplePointIndex) + " / " +
+                                  str(_MidDivCount - 1) + Fore.WHITE + " TIME USED -> " + Fore.YELLOW +
+                                  str(_MidUsedTime) + Fore.WHITE + " ETA -> " + Fore.GREEN + str(_MidEtaTime))
+                        logger.info("Right channel progress rate -> " + str(SamplePointIndex) + " / " +
+                                    str(_MidDivCount - 1) + " TIME USED -> " +
+                                    str(_MidUsedTime) + " ETA -> " + str(_MidEtaTime))
                 else:
                     _TempAppendCount = 0
                     if ChannelIndex == 0:
-                        self.AfterSignalLeft = np.append(
-                            self.AfterSignalLeft, _TempArrayLeft)
+                        self.AfterSignalLeft = np.append(self.AfterSignalLeft, _TempArrayLeft)
                         _TempArrayLeft = np.array([()])
                     else:
-                        self.AfterSignalRight = np.append(
-                            self.AfterSignalRight, _TempArrayRight)
+                        self.AfterSignalRight = np.append(self.AfterSignalRight, _TempArrayRight)
                         _TempArrayRight = np.array([()])
                 # 倒腾计数器
                 _TempAppendCount += 1
                 if SuffixFlag:
                     break
-        self.AfterSignal = np.array(
-            [self.AfterSignalLeft.real, self.AfterSignalRight.real])
+        self.AfterSignal = np.array([self.AfterSignalLeft.real, self.AfterSignalRight.real])
         self.FinSaveFile()
 
 

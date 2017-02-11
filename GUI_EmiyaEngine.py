@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+
 import os
 import argparse
 import datetime
@@ -21,7 +22,7 @@ logging.basicConfig(
     filename='EmiyaGUI.log',
     filemode='w+'
 )
-logger = logging.getLogger("EmiaLog")
+logger = logging.getLogger("EmiyaLog")
 # console = logging.StreamHandler()
 # console.setLevel(logging.INFO)
 # logger.addHandler(console)
@@ -68,20 +69,23 @@ class EmiyaEngineCore(QtCore.QThread):
         self.BeforeSignal, self.BeforeSignalSR = librosa.load(self.ReadyFilePath, sr=None, mono=False)
         self.AfterSignalLeft = np.array([()])
         self.AfterSignalRight = np.array([()])
-        # print("Load signal complete. ChannelCount: %s SampleRate: %s Hz" % (str(len(self.BeforeSignal)), str(self.BeforeSignalSR)))
-        logger.info("Load signal complete. ChannelCount: %s SampleRate: %s Hz" % (str(len(self.BeforeSignal)), str(self.BeforeSignalSR)))
+        print("Load signal complete. ChannelCount: %s SampleRate: %s Hz" % (str(len(self.BeforeSignal)),
+                                                                            str(self.BeforeSignalSR)))
+        logger.info("Load signal complete. ChannelCount: %s SampleRate: %s Hz" % (str(len(self.BeforeSignal)),
+                                                                                  str(self.BeforeSignalSR)))
 
     def MidUpSRC(self):
         # 重采样loss样本到96K
-        # print("Please wait for SRC.")
+        print("Please wait for SRC.")
         logger.info("Please wait for SRC.")
         self.MidSignalSR = 96000
         self.AfterSignalSR = self.MidSignalSR
         if self.MidSRCFalse:
             self.MidSignal = self.BeforeSignal
         else:
-            self.MidSignal = resampy.resample(self.BeforeSignal, self.BeforeSignalSR, self.MidSignalSR, filter='kaiser_best')
-        # print("Signal SRC complete.")
+            self.MidSignal = resampy.resample(self.BeforeSignal, self.BeforeSignalSR,
+                                              self.MidSignalSR, filter='kaiser_best')
+        print("Signal SRC complete.")
         logger.info("Signal SRC complete.")
 
     def MidFindThresholdPoint(self, _MidFFTResultSingle, _FFTPointCount):
@@ -90,8 +94,8 @@ class EmiyaEngineCore(QtCore.QThread):
         # Step0. 找出基波幅度
         _MidBaseFreqAmp = _MidAmpData.max()
         if self.MidPrint:
-            # print("Signal max AMP -> %s" % _MidBaseFreqAmp)
-            logger.debug("Signal max AMP -> %s" % _MidBaseFreqAmp)
+            print("Signal max AMP -> %s" % _MidBaseFreqAmp)
+        logger.debug("Signal max AMP -> %s" % _MidBaseFreqAmp)
         # Step1. 找出接续的阈值
         _MidThresholdHit = 1.0e-11                                     # 方差判定阈值
         _MidThresholdPoint = 0                                         # 最后的阈值点
@@ -123,8 +127,14 @@ class EmiyaEngineCore(QtCore.QThread):
                 break
         # 打印函数返回信息
         if self.MidPrint:
-            # print("Signal threshold point -> %s @ %sHz  Max Amp -> %s" % (_MidThresholdPoint, _MidThresholdPoint * (48000 / (_MidFindRange + 1)), _MidBaseFreqAmp))
-            logger.debug("Signal threshold point -> %s @ %sHz  Max Amp -> %s" % (_MidThresholdPoint, _MidThresholdPoint * (48000 / (_MidFindRange + 1)), _MidBaseFreqAmp))
+            print("Signal threshold point -> %s @ %sHz  Max Amp -> %s" % (_MidThresholdPoint,
+                                                                          _MidThresholdPoint *
+                                                                          (48000 / (_MidFindRange + 1)),
+                                                                          _MidBaseFreqAmp))
+        logger.debug("Signal threshold point -> %s @ %sHz  Max Amp -> %s" % (_MidThresholdPoint,
+                                                                             _MidThresholdPoint *
+                                                                             (48000 / (_MidFindRange + 1)),
+                                                                             _MidBaseFreqAmp))
         # _MidThresholdPoint = round(21000/(48000/(_FFTPointCount/2)))
         return _MidBaseFreqAmp, _MidThresholdPoint
 
@@ -144,7 +154,8 @@ class EmiyaEngineCore(QtCore.QThread):
                 _AmpJitterMax = _MidBaseFreqAmp * _MidRealValue * 2
                 _AmpJitterPrefix = -1 if random.randint(0, 100000) < 50000 else 1
                 _MiditterPrefix = -1 if random.randint(0, 100000) < 50000 else 1
-                _MidDeltaJitterValue = random.uniform(_BaseJitterMin, _BaseJitterMax) + _AmpJitterPrefix * random.uniform(_AmpJitterMin, _AmpJitterMax)
+                _MidDeltaJitterValue = random.uniform(_BaseJitterMin, _BaseJitterMax) + \
+                                       _AmpJitterPrefix * random.uniform(_AmpJitterMin, _AmpJitterMax)
                 _MidFFTResultDouble.real[i] += _MiditterPrefix * _MidDeltaJitterValue
         return _MidFFTResultDouble
 
@@ -155,8 +166,8 @@ class EmiyaEngineCore(QtCore.QThread):
             SaveFilePath = os.path.abspath(os.path.join(self.ReadyFilePath, os.pardir)) + "\\"
             OutputFileName = SaveFilePath + 'Output_%s.wav' % uuid.uuid4().hex
         librosa.output.write_wav(SaveFilePath, self.AfterSignal, self.AfterSignalSR)
-        # print(Back.GREEN + Fore.WHITE + "SAVE DONE" + Back.BLACK + " Output path -> " + SaveFilePath)
-        logger.info(Back.GREEN + Fore.WHITE + "SAVE DONE" + Back.BLACK + " Output path -> " + SaveFilePath)
+        print(Back.GREEN + Fore.WHITE + "SAVE DONE" + Back.BLACK + " Output path -> " + SaveFilePath)
+        logger.info("SAVE DONE  Output path -> " + SaveFilePath)
 
     def run(self):
         # 加载文件启动SRC
@@ -208,9 +219,11 @@ class EmiyaEngineCore(QtCore.QThread):
                     _MidFFTResultDouble = np.fft.fft(_TempSignal, _FFTPointCount) / (_FFTPointCount)
                     _MidFFTResultSingle = np.fft.fft(_TempSignal, _FFTPointCount) / (_FFTPointCount / 2)
                     # 获取当前分段最大振幅, 处理阈值点
-                    _MidBaseFreqAmp, _MidThresholdPoint = self.MidFindThresholdPoint(_MidFFTResultSingle, _FFTPointCount)
+                    _MidBaseFreqAmp, _MidThresholdPoint = self.MidFindThresholdPoint(_MidFFTResultSingle,
+                                                                                     _FFTPointCount)
                     # 构造抖动到当前FFT实际值上
-                    _MidFFTAfterJitter = self.MidInsertJitter(_MidFFTResultDouble, _FFTPointCount, _MidThresholdPoint, _MidBaseFreqAmp)
+                    _MidFFTAfterJitter = self.MidInsertJitter(_MidFFTResultDouble, _FFTPointCount,
+                                                              _MidThresholdPoint, _MidBaseFreqAmp)
                     # 逆变换IFFT
                     _MidTimerDomSignal = np.fft.ifft(_MidFFTAfterJitter, n=_FFTPointCount)
                     # 接续到新信号上
@@ -219,8 +232,8 @@ class EmiyaEngineCore(QtCore.QThread):
                         _AppendLength = _FFTPointCount-SuffixLength
                     _MidAppendSignal = _MidTimerDomSignal[0:_AppendLength]
                     if self.MidPrint:
-                        # print("Per each length -> %s" % len(_MidAppendSignal))
-                        logger.debug("Per each length -> %s" % len(_MidAppendSignal))
+                        print("Per each length -> %s" % len(_MidAppendSignal))
+                    logger.debug("Per each length -> %s" % len(_MidAppendSignal))
                     if ChannelIndex == 0:
                         _EachPieceLeft = np.append(_EachPieceLeft, _MidAppendSignal)
                     else:
@@ -242,19 +255,28 @@ class EmiyaEngineCore(QtCore.QThread):
                     else:
                         _MidTotalEtaTime = _MidEtaTime
                     # 进度比例
-                    _MidProgressRate = round(50 * (SamplePointIndex + 1) / _MidDivCount) + (50 if ChannelIndex == 1 else 0)
+                    _MidProgressRate = round(50 * (SamplePointIndex + 1) / _MidDivCount) + \
+                                       (50 if ChannelIndex == 1 else 0)
                     self.Update.emit(str(_MidTotalUsedTime)[:-5], str(_MidTotalEtaTime)[:-5], _MidProgressRate)
                     # 构造显示文本
                     if ChannelIndex == 0:
                         _TempArrayLeft = np.append(_TempArrayLeft, _EachPieceLeft)
                         if self.MidPrintProgress:
-                            # print("Left channel progress rate -> " + Fore.CYAN + str(SamplePointIndex) + " / " + str(_MidDivCount-1) + Fore.WHITE + " TIME USED -> " + Fore.YELLOW + str(_MidUsedTime) + Fore.WHITE + " ETA -> " + Fore.GREEN + str(_MidEtaTime))
-                            logger.info("Left channel progress rate -> " + Fore.CYAN + str(SamplePointIndex) + " / " + str(_MidDivCount-1) + Fore.WHITE + " TIME USED -> " + Fore.YELLOW + str(_MidUsedTime) + Fore.WHITE + " ETA -> " + Fore.GREEN + str(_MidEtaTime))
+                            print("Left channel progress rate -> " + Fore.CYAN + str(SamplePointIndex) + " / " +
+                                  str(_MidDivCount-1) + Fore.WHITE + " TIME USED -> " + Fore.YELLOW +
+                                  str(_MidUsedTime) + Fore.WHITE + " ETA -> " + Fore.GREEN + str(_MidEtaTime))
+                        logger.info("Left channel progress rate -> " + str(SamplePointIndex) + " / " +
+                                    str(_MidDivCount-1) + " TIME USED -> " +
+                                    str(_MidUsedTime) + " ETA -> " + str(_MidEtaTime))
                     else:
                         _TempArrayRight = np.append(_TempArrayRight, _EachPieceRight)
                         if self.MidPrintProgress:
-                            # print("Right channel progress rate -> " + Fore.CYAN + str(SamplePointIndex) + " / " + str(_MidDivCount-1) + Fore.WHITE + " TIME USED -> " + Fore.YELLOW + str(_MidUsedTime) + Fore.WHITE + " ETA -> " + Fore.GREEN + str(_MidEtaTime))
-                            logger.info("Right channel progress rate -> " + Fore.CYAN + str(SamplePointIndex) + " / " + str(_MidDivCount-1) + Fore.WHITE + " TIME USED -> " + Fore.YELLOW + str(_MidUsedTime) + Fore.WHITE + " ETA -> " + Fore.GREEN + str(_MidEtaTime))
+                            print("Right channel progress rate -> " + Fore.CYAN + str(SamplePointIndex) + " / " +
+                                  str(_MidDivCount-1) + Fore.WHITE + " TIME USED -> " + Fore.YELLOW +
+                                  str(_MidUsedTime) + Fore.WHITE + " ETA -> " + Fore.GREEN + str(_MidEtaTime))
+                        logger.info("Right channel progress rate -> " + str(SamplePointIndex) + " / " +
+                                    str(_MidDivCount-1) + " TIME USED -> " +
+                                    str(_MidUsedTime) + " ETA -> " + str(_MidEtaTime))
                 else:
                     _TempAppendCount = 0
                     if ChannelIndex == 0:
@@ -274,7 +296,7 @@ class EmiyaEngineCore(QtCore.QThread):
 
 class EmiyaEngineGUI(object):
 
-    ''' Emiya Engine GUI ARGS '''
+    # Emiya Engine GUI ARGS
 
     InputFilePath = ''
     OutputFilePath = ''
@@ -500,7 +522,8 @@ class EmiyaEngineGUI(object):
             if self.InputFilePath and self.OutputFilePath:
                 self.IsStarted = True
                 self.StartButton.setText("停止处理")
-                self.CoreObject = EmiyaEngineCore(None, self.InputFilePath, self.OutputFilePath, 1, self.SplitSize, self.IsUseWindow)
+                self.CoreObject = EmiyaEngineCore(None, self.InputFilePath, self.OutputFilePath,
+                                                  1, self.SplitSize, self.IsUseWindow)
                 self.CoreObject.Update.connect(self.UpdateState)
                 self.CoreObject.Finish.connect(self.DetectEnd)
                 self.CoreObject.start()
@@ -511,7 +534,7 @@ class EmiyaEngineGUI(object):
             self.UsedTime.setText("00:00:00")
             self.EtaTime.setText("00:00:00")
             self.GlobalProgressBar.setValue(0)
-            # print("所有处理已停止")
+            print("所有处理已停止")
             logger.info("所有处理已停止")
 
     def DetectEnd(self):
