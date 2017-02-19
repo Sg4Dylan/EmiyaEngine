@@ -223,10 +223,10 @@ class EmiyaEngineCore:
                         _TempSignal = np.append(_TempSignal, [0])
                         SuffixLength += 1
                     # 执行FFT运算, 单边谱用于分析, 双边谱用于处理
-                    if self.AnalysisWindow:
-                        _TempSignal *= scipy.signal.hann(_FFTPointCount, sym=0)
                     _MidFFTResultDouble = np.fft.fft(
                         _TempSignal, _FFTPointCount) / (_FFTPointCount)
+                    if self.AnalysisWindow:
+                        _TempSignal *= scipy.signal.hann(_FFTPointCount, sym=0)
                     _MidFFTResultSingle = np.fft.fft(
                         _TempSignal, _FFTPointCount) / (_FFTPointCount / 2)
                     # 获取当前分段最大振幅, 处理阈值点
