@@ -63,37 +63,37 @@ class EmiyaEngine:
             # 生成进程池
             pool = multiprocessing.Pool(processes=self.cpu_thread)
             # 初始化结果字典
+            raw_result_dict = {}
             result_dict = {}
             # 分割时间域
-            each_piece_length = round(len(self.input_signal_array[channel_index]) / self.cpu_thread)
+            splited_input_signal = np.array_split(self.input_signal_array[channel_index], self.cpu_thread)
             for i in range(self.cpu_thread):
-                # 计算分发分片的起始位置
-                piece_start_pos = i * each_piece_length
-                piece_end_pos = (i + 1) * each_piece_length
-                if piece_end_pos > len(self.input_signal_array[channel_index]):
-                    piece_end_pos = len(self.input_signal_array[channel_index])
-                # 生成分片
-                process_piece = self.input_signal_array[channel_index][piece_start_pos:piece_end_pos]
                 # 下发分片
-                result_dict[i] = pool.apply_async(self.process_core, (process_piece, i, ))
+                raw_result_dict[i] = pool.apply_async(self.process_core, (splited_input_signal[i], i, ))
             pool.close()
             pool.join()
             # 拼合分片
-                # 接下来处理这里的同步拼接问题
             temp_array = np.array([()])
+            # 理清顺序
             for i in range(self.cpu_thread):
-                temp_array = np.append(result_dict[i].get(), temp_array)
+                result_dict[raw_result_dict[i].get()[1]] = raw_result_dict[i].get()[0]
+            # 追加分片
+            for i in range(self.cpu_thread):
+                temp_array = np.append(temp_array, result_dict[i])
+            # 合并到各声道
             if channel_index == 0:
                 self.mid_signal_larray = temp_array
             else:
                 self.mid_signal_rarray = temp_array
+        # 拼合左右声道
         self.mid_signal_carray = np.array([self.mid_signal_larray, self.mid_signal_rarray])
+        # 保存文件
         self.save_file()
 
     def process_core(self, signal_piece, index):
-        print("Entering process Index %s" % index)
-        print(len(signal_piece))
-        return signal_piece
+        
+        
+        return [signal_piece, index]
 
     def save_file(self):
         librosa.output.write_wav(self.output_file_path, self.mid_signal_carray, self.input_sr)
