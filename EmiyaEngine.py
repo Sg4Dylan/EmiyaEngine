@@ -73,7 +73,6 @@ class EmiyaEngine:
                                             self.input_sr, 
                                             self.input_sr * self.proc_mid_sr_rate, 
                                             filter='kaiser_fast')
-            print(len(pre_src_data))
             # 分割时间域
             splited_input_signal = np.array_split(pre_src_data, self.cpu_thread)
             for i in range(self.cpu_thread):
@@ -91,7 +90,7 @@ class EmiyaEngine:
             # 追加分片
             for i in range(self.cpu_thread):
                 temp_array = np.append(temp_array, result_dict[i])
-            print(len(temp_array))
+            print("Whole length: before -> %s after -> %s" % (len(pre_src_data), len(temp_array)))
             # SRC 后处理
             temp_src_array = resampy.resample(temp_array, 
                                               self.input_sr * self.proc_mid_sr_rate, 
@@ -109,45 +108,61 @@ class EmiyaEngine:
         self.save_file()
 
     def process_core(self, signal_piece, index):
-        #
+        # 总长及分割数目
         this_whole_length = len(signal_piece)
         this_div_count = round(this_whole_length/self.proc_fft_length)
-        #
+        # 输出数组
         this_output = np.array([()])
+        # 输出临时数组
+        this_temp_block = np.array([()])
+        this_temp_count = 0
+        # 各分片运算
         for i in range(this_div_count):
-            #
+            # 起始点
             this_start_pos = i * self.proc_fft_length
             this_end_pos = i * self.proc_fft_length + self.proc_fft_length
-            #
+            # 当前分片
             this_proc_piece = signal_piece[this_start_pos:this_end_pos]
-            #
+            # 待修正尾部指示及尾部补齐长度
             this_suffix_flag = False
             this_suffix_length = 0
-            #
+            # 真尾部指示
+            this_tail_flag = False
+            if i == (this_div_count - 1):
+                this_tail_flag = True
+            # 尾部判定
             if len(this_proc_piece) != 2048:
-                print(len(this_proc_piece))
                 this_suffix_flag = True
-            #
+            # 尾部补齐及长度记录
             while len(this_proc_piece) != 2048:
                 this_proc_piece = np.append(this_proc_piece, [0])
                 this_suffix_length += 1
-            #
+            # FFT
             this_proc_piece_fft = np.fft.fft(this_proc_piece, self.proc_fft_length) / (self.proc_fft_length)
-            #
+            # 计算接续点及最大幅值
             this_base_freq, this_threshold_point = self.find_threshold_point(this_proc_piece_fft*2)
-            print("%sHZ  %s" % (this_base_freq, this_threshold_point))
-            #
+            print("Max Amp -> %s  Threshold point -> %s" % (this_base_freq, this_threshold_point))
+            # 加抖动
             this_proc_piece_fft = self.generate_jitter(this_proc_piece_fft, this_base_freq, this_threshold_point)
-            #
+            # IFFT
             this_proc_piece_ifft = np.fft.ifft(this_proc_piece_fft, n=self.proc_fft_length)
-            #
+            # 输出分片实部
             this_proc_piece = this_proc_piece_ifft.real
-            #
+            # 计算最终输出长度 (尾部需要排除掉补零部分)
             this_append_length = self.proc_fft_length
             if this_suffix_flag:
                 this_append_length -= this_suffix_length
-            #
-            this_output = np.append(this_output, this_proc_piece[0:this_append_length])
+            # 直接追加到目标输出返回数组
+            # this_output = np.append(this_output, this_proc_piece[0:this_append_length])
+            # 使用缓冲区再输出返回 (内存消耗和上边的方法差不多，但是能稍微抵消掉 numpy 对大数组拼接的问题)
+            this_temp_block = np.append(this_temp_block, this_proc_piece[0:this_append_length])
+            this_temp_count += 1
+            # 尾部判定追加
+            if this_temp_count > self.split_size or this_tail_flag:
+                this_output = np.append(this_output, this_temp_block)
+                this_temp_block = np.array([()])
+                this_temp_count = 0
+            
         return [this_output, index]
 
     def find_threshold_point(self, input_fft):
@@ -218,5 +233,6 @@ class EmiyaEngine:
 if __name__ == "__main__":
 
     multiprocessing.freeze_support()
-    EmiyaEngine("lossless_short.wav","lossless_test.wav")
+    # 输入文件路径, 输出文件路径
+    EmiyaEngine("demi.mp3","demi-output.wav")
 
