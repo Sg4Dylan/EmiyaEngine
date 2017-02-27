@@ -30,7 +30,7 @@ class EmiyaEngine:
     mid_signal_rarray = ''
     mid_signal_carray = ''
     # 各进程处理参数
-    proc_mid_sr_rate = 32
+    proc_mid_sr_rate = 2
     proc_fft_length = 2048
     # 输出用参数
     output_file_path = ''
@@ -68,11 +68,18 @@ class EmiyaEngine:
             # 初始化结果字典
             raw_result_dict = {}
             result_dict = {}
+            # SRC 预处理
+            pre_src_data = resampy.resample(self.input_signal_array[channel_index], 
+                                            self.input_sr, 
+                                            self.input_sr * self.proc_mid_sr_rate, 
+                                            filter='kaiser_fast')
+            print(len(pre_src_data))
             # 分割时间域
-            splited_input_signal = np.array_split(self.input_signal_array[channel_index], self.cpu_thread)
+            splited_input_signal = np.array_split(pre_src_data, self.cpu_thread)
             for i in range(self.cpu_thread):
                 # 下发分片
                 raw_result_dict[i] = pool.apply_async(self.process_core, (splited_input_signal[i], i, ))
+                # raw_result_dict[i] = self.process_core(splited_input_signal[i], i)
             pool.close()
             pool.join()
             # 拼合分片
@@ -80,33 +87,68 @@ class EmiyaEngine:
             # 理清顺序
             for i in range(self.cpu_thread):
                 result_dict[raw_result_dict[i].get()[1]] = raw_result_dict[i].get()[0]
+                # result_dict[raw_result_dict[i][1]] = raw_result_dict[i][0]
             # 追加分片
             for i in range(self.cpu_thread):
                 temp_array = np.append(temp_array, result_dict[i])
+            print(len(temp_array))
+            # SRC 后处理
+            temp_src_array = resampy.resample(temp_array, 
+                                              self.input_sr * self.proc_mid_sr_rate, 
+                                              self.output_sr, 
+                                              filter='kaiser_fast')
+            # temp_src_array = temp_array
             # 合并到各声道
             if channel_index == 0:
-                self.mid_signal_larray = temp_array
+                self.mid_signal_larray = temp_src_array
             else:
-                self.mid_signal_rarray = temp_array
+                self.mid_signal_rarray = temp_src_array
         # 拼合左右声道
         self.mid_signal_carray = np.array([self.mid_signal_larray, self.mid_signal_rarray])
         # 保存文件
         self.save_file()
 
     def process_core(self, signal_piece, index):
-        # SRC 预处理
-        proc_mid_data = resampy.resample(signal_piece, 
-                                         self.input_sr, 
-                                         self.input_sr * self.proc_mid_sr_rate, 
-                                         filter='kaiser_fast')
-        # 加抖动处理
-        
-        # SRC 后处理
-        proc_fin_piece = resampy.resample(proc_mid_data, 
-                                          self.input_sr * self.proc_mid_sr_rate, 
-                                          self.output_sr, 
-                                          filter='kaiser_fast')
-        return [proc_fin_piece, index]
+        #
+        this_whole_length = len(signal_piece)
+        this_div_count = round(this_whole_length/self.proc_fft_length)
+        #
+        this_output = np.array([()])
+        for i in range(this_div_count):
+            #
+            this_start_pos = i * self.proc_fft_length
+            this_end_pos = i * self.proc_fft_length + self.proc_fft_length
+            #
+            this_proc_piece = signal_piece[this_start_pos:this_end_pos]
+            #
+            this_suffix_flag = False
+            this_suffix_length = 0
+            #
+            if len(this_proc_piece) != 2048:
+                print(len(this_proc_piece))
+                this_suffix_flag = True
+            #
+            while len(this_proc_piece) != 2048:
+                this_proc_piece = np.append(this_proc_piece, [0])
+                this_suffix_length += 1
+            #
+            this_proc_piece_fft = np.fft.fft(this_proc_piece, self.proc_fft_length) / (self.proc_fft_length)
+            #
+            this_base_freq, this_threshold_point = self.find_threshold_point(this_proc_piece_fft*2)
+            print("%sHZ  %s" % (this_base_freq, this_threshold_point))
+            #
+            this_proc_piece_fft = self.generate_jitter(this_proc_piece_fft, this_base_freq, this_threshold_point)
+            #
+            this_proc_piece_ifft = np.fft.ifft(this_proc_piece_fft, n=self.proc_fft_length)
+            #
+            this_proc_piece = this_proc_piece_ifft.real
+            #
+            this_append_length = self.proc_fft_length
+            if this_suffix_flag:
+                this_append_length -= this_suffix_length
+            #
+            this_output = np.append(this_output, this_proc_piece[0:this_append_length])
+        return [this_output, index]
 
     def find_threshold_point(self, input_fft):
         # 鉴定频谱基本参数
@@ -145,7 +187,7 @@ class EmiyaEngine:
                 break
         return base_amp_freq, fin_threshold_point
 
-    def generate_jitter(self, input_fft, fin_threshold_point, base_amp_freq):
+    def generate_jitter(self, input_fft, base_amp_freq, fin_threshold_point):
         # 构造抖动
         if fin_threshold_point <= 0:
             return input_fft
@@ -166,8 +208,7 @@ class EmiyaEngine:
                     1 if random.randint(0, 100000) < 50000 else 1
                 delta_jitter_value = random.uniform(
                     base_jitter_min, base_jitter_max) + amp_jitter_prefix * random.uniform(amp_jitter_min, amp_jitter_max)
-                input_fft.real[
-                    i] += jitter_prefix * delta_jitter_value
+                input_fft.real[i] += jitter_prefix * delta_jitter_value
         return input_fft
 
     def save_file(self):
@@ -178,110 +219,4 @@ if __name__ == "__main__":
 
     multiprocessing.freeze_support()
     EmiyaEngine("lossless_short.wav","lossless_test.wav")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
