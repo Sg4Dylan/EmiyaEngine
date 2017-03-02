@@ -30,18 +30,21 @@ class EmiyaEngine:
     mid_signal_rarray = ''
     mid_signal_carray = ''
     # 各进程处理参数
-    proc_mid_sr_rate = 2
+    proc_mid_sr_rate = 4
     proc_fft_length = 2048
     # 输出用参数
     output_file_path = ''
     output_sr = 0
     split_size = 500
 
-    def __init__(self, input=None, output=None, output_sr=96000, split_size=500):
+    def __init__(self, input=None, output=None, output_sr=96000, split_size=500, cpu_thread=None):
         # 导入参数
         if not input or not output:
             print("Missing parameters.")
             return
+        # 读取 CPU 线程数
+        if not cpu_thread:
+            self.cpu_thread = multiprocessing.cpu_count()
         self.input_file_path = input
         self.output_file_path = output
         self.output_sr = output_sr
@@ -57,8 +60,6 @@ class EmiyaEngine:
             self.input_file_path, sr=None, mono=False)
         print("Load signal complete. ChannelCount: %s SampleRate: %s Hz" % (
             str(len(self.input_signal_array)), str(self.input_sr)))
-        # 读取 CPU 线程数
-        self.cpu_thread = multiprocessing.cpu_count()
 
     def process_leader(self):
         # 左右声道
@@ -140,10 +141,10 @@ class EmiyaEngine:
             # FFT
             this_proc_piece_fft = np.fft.fft(this_proc_piece, self.proc_fft_length) / (self.proc_fft_length)
             # 计算接续点及最大幅值
-            this_base_freq, this_threshold_point = self.find_threshold_point(this_proc_piece_fft*2)
-            print("Max Amp -> %s  Threshold point -> %s" % (this_base_freq, this_threshold_point))
+            this_freq_thd, this_base_amp, this_threshold_point = self.find_threshold_point(this_proc_piece_fft*2)
+            # print("Max Amp -> %s  Threshold point -> %s" % (this_base_freq, this_threshold_point))
             # 加抖动
-            this_proc_piece_fft = self.generate_jitter(this_proc_piece_fft, this_base_freq, this_threshold_point)
+            this_proc_piece_fft = self.generate_jitter(this_proc_piece_fft, this_freq_thd, this_base_amp, this_threshold_point)
             # IFFT
             this_proc_piece_ifft = np.fft.ifft(this_proc_piece_fft, n=self.proc_fft_length)
             # 输出分片实部
@@ -168,61 +169,74 @@ class EmiyaEngine:
     def find_threshold_point(self, input_fft):
         # 鉴定频谱基本参数
         amp_fft = abs(input_fft[range(self.proc_fft_length // 2)])
-        # Step0. 找出基波幅度
-        base_amp_freq = amp_fft.max()
-        # Step1. 找出接续的阈值
-        threshold_hit = 1.0e-11                                                      # 方差判定阈值
-        fin_threshold_point = 0                                                      # 最后的阈值点
-        find_range = int((self.proc_fft_length / 2) - 1)                             # 搜索的范围
-        start_find_pos = round(2000 / (self.input_sr / (self.proc_fft_length / 2)))  # 从2K频点附近开始寻找，加快速度
-        start_flag = True                                                            # 循环用的启动Flag
-        loop_count = 0                                                               # 循环计数器
-        legal_freq = (self.input_sr / 2) - 500                                       # 判定结果合法的阈值频率
-        forward_freq = 3000                                                          # 前向修正频率
-        order_freq = (self.input_sr / 2) - 6000                                      # 钦定频率
-        # Rev.1: 检查接续点是否符合常理
-        while start_flag or fin_threshold_point > round(legal_freq / (self.input_sr / (self.proc_fft_length / 2))):
-            start_flag = False
-            if (fin_threshold_point * (self.input_sr / (self.proc_fft_length / 2))) > int(self.input_sr / 2):
-                threshold_hit *= 2
-            for i in range(start_find_pos, find_range):
-                if i + 5 > find_range:
-                    break
-                # 计算连续五个采样*3 的方差，与阈值比较，判断频谱消失的位置
-                if np.var(amp_fft[i:i + 4]) < threshold_hit and \
-                   np.var(amp_fft[i + 1:i + 5]) < threshold_hit:
-                    # 定位到当前位置的前500Hz位置
-                    fin_threshold_point = i - round(forward_freq / (self.input_sr / (self.proc_fft_length / 2)))
-                    break
-            # 错误超过5把就强行钦定频率
-            loop_count += 1
-            if loop_count > 5:
-                fin_threshold_point = round(
-                    order_freq / (self.input_sr / (self.proc_fft_length / 2)))
+        # Step0. 计算基波幅度及该幅度所在的位置
+        base_amp = amp_fft.max()
+        base_amp_freq = np.argmax(amp_fft)
+        # Step0.1. 计算次峰对应的位置
+        secondary_array = amp_fft
+        secondary_array[base_amp_freq] = 0
+        secondary_amp = secondary_array.max()
+        secondary_amp_freq = np.argmax(secondary_array)
+        # Step1. 找出接续点的搜索范围
+        fft_resolution = (self.proc_mid_sr_rate * self.input_sr / 2) / (self.proc_fft_length / 2)
+        hit_start = base_amp_freq * 2
+        hit_end = int((self.input_sr / 2) / fft_resolution)
+        # Step1.1 计算保护阈值频率所在位置
+        freq_thd = int(secondary_amp_freq*4 / fft_resolution)
+        # Setp2. 找出接续点
+        threshold_hit = 8.0e-10
+        fin_threshold_point = 0
+        for hit_pos in range(hit_start, hit_end):
+            if hit_pos+6>1023:
                 break
-        return base_amp_freq, fin_threshold_point
+            if np.var(amp_fft[hit_pos:hit_pos+4]) < threshold_hit and \
+               np.var(amp_fft[hit_pos+1:hit_pos+5]) < threshold_hit and \
+               np.var(amp_fft[hit_pos+2:hit_pos+6]) < threshold_hit:
+                fin_threshold_point = hit_pos - 3
+                break
+        # Setp3. 检查接续点
+        # Step3.1 检查最高电平是否达标
+        threshold_amp = 7.45e-8
+        if base_amp < threshold_amp:
+            fin_threshold_point = 0
+        else:
+            # Step3.2 检查目标频率是否小于等于 0
+            if fin_threshold_point <= 0:
+                if base_amp_freq != 0:
+                    fin_threshold_point = hit_start * 3 # 钦定三次谐波位置
+                else:
+                    fin_threshold_point = secondary_amp_freq * 2 # 钦定二次谐波位置
+        # 打印 DEBUG
+        print("AMP-> %s THD-> %s START-> %s END-> %s HIT_POINT-> %s " % (base_amp, freq_thd, hit_start, hit_end, fin_threshold_point))
+        return freq_thd, base_amp, fin_threshold_point
 
-    def generate_jitter(self, input_fft, base_amp_freq, fin_threshold_point):
-        # 构造抖动
-        if fin_threshold_point <= 0:
+    def generate_jitter(self, input_fft, freq_thd, base_amp, fin_threshold_point):
+        # 判定点为0时做忽略处理
+        if fin_threshold_point == 0:
             return input_fft
+        # 插入抖动
         for i in range(fin_threshold_point, self.proc_fft_length - fin_threshold_point):
-            # Rev.0: 调整生成概率，频率越高概率越低
-            # Rev.1: 加入幅值判定，幅度越大概率越大
-            gen_possible = abs((self.proc_fft_length / 2) - i) / ((self.proc_fft_length /
-                                                             2) - fin_threshold_point) * (base_amp_freq / 0.22)
+            # 生成概率，频率越高概率越低
+            if fin_threshold_point >= freq_thd:
+                gen_possible = abs((self.proc_fft_length / 2) - i) / ((self.proc_fft_length / 2) - fin_threshold_point)
+            else:
+                if i > (self.proc_fft_length / 2):
+                    gen_possible = (i - (self.proc_fft_length - freq_thd)) / (freq_thd - fin_threshold_point)
+                else:
+                    gen_possible = (freq_thd - i) / (freq_thd - fin_threshold_point)
             if random.randint(0, 1000000) < 800000 * gen_possible:  # 0<=x<=10
-                real_value = abs(input_fft.real[i])
-                base_jitter_min = real_value * 0.5 * (1 - gen_possible)
-                base_jitter_max = real_value * 6 * gen_possible
-                amp_jitter_min = base_amp_freq * real_value * 0.5
-                amp_jitter_max = base_amp_freq * real_value * 2
-                amp_jitter_prefix = - \
-                    1 if random.randint(0, 100000) < 50000 else 1
-                jitter_prefix = - \
-                    1 if random.randint(0, 100000) < 50000 else 1
-                delta_jitter_value = random.uniform(
-                    base_jitter_min, base_jitter_max) + amp_jitter_prefix * random.uniform(amp_jitter_min, amp_jitter_max)
+                # 计算基础抖动范围
+                base_jitter_delta = abs(input_fft.real[i])
+                base_jitter_min = base_jitter_delta * 0.15 * (1 - gen_possible)
+                base_jitter_max = base_jitter_delta * 1.75 * gen_possible
+                # 根据基波电平的额外抖动
+                amp_jitter_min = base_amp * base_jitter_delta * 0.05
+                amp_jitter_max = base_amp * base_jitter_delta * 1.5
+                # 随机正负号添加
+                amp_jitter_prefix = -1 if random.randint(0, 100000) < 50000 else 1
+                jitter_prefix = - 1 if random.randint(0, 100000) < 50000 else 1
+                # 加入抖动
+                delta_jitter_value = random.uniform(base_jitter_min, base_jitter_max) + amp_jitter_prefix * random.uniform(amp_jitter_min, amp_jitter_max)
                 input_fft.real[i] += jitter_prefix * delta_jitter_value
         return input_fft
 
