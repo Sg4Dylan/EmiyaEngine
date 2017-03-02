@@ -30,7 +30,7 @@ class EmiyaEngine:
     mid_signal_rarray = ''
     mid_signal_carray = ''
     # 各进程处理参数
-    proc_mid_sr_rate = 4
+    proc_mid_sr_rate = 16
     proc_fft_length = 2048
     # 输出用参数
     output_file_path = ''
@@ -176,13 +176,13 @@ class EmiyaEngine:
         secondary_array = amp_fft
         secondary_array[base_amp_freq] = 0
         secondary_amp = secondary_array.max()
-        secondary_amp_freq = np.argmax(secondary_array)
+        secondary_amp_freq = np.argmax(secondary_array) + 1
         # Step1. 找出接续点的搜索范围
         fft_resolution = (self.proc_mid_sr_rate * self.input_sr / 2) / (self.proc_fft_length / 2)
         hit_start = base_amp_freq * 2
         hit_end = int((self.input_sr / 2) / fft_resolution)
         # Step1.1 计算保护阈值频率所在位置
-        freq_thd = int(secondary_amp_freq*4 / fft_resolution)
+        freq_thd = secondary_amp_freq * 2
         # Setp2. 找出接续点
         threshold_hit = 8.0e-10
         fin_threshold_point = 0
@@ -225,10 +225,13 @@ class EmiyaEngine:
                 else:
                     gen_possible = (freq_thd - i) / (freq_thd - fin_threshold_point)
             if random.randint(0, 1000000) < 800000 * gen_possible:  # 0<=x<=10
+                # 基础范围倍率
+                base_jitter_rate = [0.15,1.75] # 适用于乐器纯音乐、古典乐、轻音乐（频谱不是特别亮）
+                # base_jitter_rate = [0.7,2.5] # 适用于流行乐、电子乐、摇滚乐（频谱亮且充满理论范围）
                 # 计算基础抖动范围
                 base_jitter_delta = abs(input_fft.real[i])
-                base_jitter_min = base_jitter_delta * 0.15 * (1 - gen_possible)
-                base_jitter_max = base_jitter_delta * 1.75 * gen_possible
+                base_jitter_min = base_jitter_delta * base_jitter_rate[0] * (1 - gen_possible)
+                base_jitter_max = base_jitter_delta * base_jitter_rate[1] * gen_possible
                 # 根据基波电平的额外抖动
                 amp_jitter_min = base_amp * base_jitter_delta * 0.05
                 amp_jitter_max = base_amp * base_jitter_delta * 1.5
