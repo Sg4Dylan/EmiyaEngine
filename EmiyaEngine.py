@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 # Emiya Engine
-# Version: Alpha.1 Rev.0
+# Version: Alpha.1 Rev.1
 # Author: Sg4Dylan - <sg4dylan#gmail.com>
 # Created: 02/26/2017
 # 真正重要的東西，只用眼睛是看不見的，
