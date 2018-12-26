@@ -1,0 +1,6 @@
+{
+    "ui": "res/window.ui",
+    "lang": "chs",
+    "eng": "res/eng.qm",
+    "chs": "res/chs.ts"
+}

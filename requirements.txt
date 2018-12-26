@@ -1,0 +1,6 @@
+PyQt5
+librosa
+resampy
+tqdm
+numpy
+scipy
