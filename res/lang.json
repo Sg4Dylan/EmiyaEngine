@@ -1,0 +1,18 @@
+{
+    "chs": {
+        "OutputDialog": "选择输出位置",
+        "InputDialog": "选择待处理的音频文件",
+        "MsgBoxW": "警告",
+        "LackFile": "未设置输入或输出音频文件位置",
+        "ExecBtnTextStart": "执行",
+        "ExecBtnTextStop": "停止"
+    },
+    "eng": {
+        "OutputDialog": "Select output path",
+        "InputDialog": "Select input audio file",
+        "MsgBoxW": "Warning",
+        "LackFile": "Please set input audio file and output path.",
+        "ExecBtnTextStart": "Execute",
+        "ExecBtnTextStop": "Stop"
+    }
+}
