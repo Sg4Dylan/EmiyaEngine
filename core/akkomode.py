@@ -9,7 +9,7 @@ def core(
     output_sr=48000,inter_sr=1,
     test_mode=False,
     sv_l=0.02,sv_h=0.55,
-    update=None
+    update=None,msgbox=None
 ):
 
     # 加载音频
@@ -58,4 +58,10 @@ def core(
                                   output_sr * inter_sr, 
                                   output_sr, 
                                   filter='kaiser_fast')
-    librosa.output.write_wav(output_path, final_data, output_sr)
+    try:
+        librosa.output.write_wav(output_path, final_data, output_sr)
+    except PermissionError:
+        msgbox.emit("警告",
+                    "无法写入文件，请检查目标路径写入权限" \
+                    "以及文件是否已被其他程序开启。",
+                    0)

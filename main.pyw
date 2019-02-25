@@ -10,6 +10,7 @@ class Core(QtCore.QThread):
     
     Update = QtCore.pyqtSignal([float])
     Finish = QtCore.pyqtSignal()
+    MsgBox = QtCore.pyqtSignal([str,str,int])
     
     def __init__(self, parent, mode, **kwargs):
         super(Core, self).__init__(parent)
@@ -21,18 +22,19 @@ class Core(QtCore.QThread):
             copyband.core(
                 self.kwargs['input_path'],self.kwargs['output_path'],
                 self.kwargs['output_sr'],self.kwargs['inter_sr'],
-                self.kwargs['test_mode'],
+                self.kwargs['test_mode'],self.kwargs['opti_mode'],
+                self.kwargs['dyn_protect'],
                 self.kwargs['harmonic_hpfc'],self.kwargs['harmonic_sft'],
                 self.kwargs['harmonic_gain'],self.kwargs['percussive_hpfc'],
                 self.kwargs['percussive_stf'],self.kwargs['percussive_gain'],
-                self.Update)
+                self.Update,self.MsgBox)
         else:
             akkomode.core(
                 self.kwargs['input_path'],self.kwargs['output_path'],
                 self.kwargs['output_sr'],self.kwargs['inter_sr'],
                 self.kwargs['test_mode'],
                 self.kwargs['sv_l'],self.kwargs['sv_h'],
-                self.Update)
+                self.Update,self.MsgBox)
         self.Finish.emit()
 
 class MainUI(QtWidgets.QMainWindow, Ui_MainWindow):
@@ -45,7 +47,7 @@ class MainUI(QtWidgets.QMainWindow, Ui_MainWindow):
         self.lang = json.loads(open('res/lang.json','rb').read())[Config['lang']]
         self.input_path,self.output_path = None, None
         self.is_started = False
-        
+
     def _bind_ui_(self):
         self.selectInputFile.clicked.connect(lambda:self.openfile(False))
         self.selectOutputFile.clicked.connect(lambda:self.openfile(True))
@@ -77,6 +79,8 @@ class MainUI(QtWidgets.QMainWindow, Ui_MainWindow):
                 output_sr=int(self.commOutputSr.currentText()[:-2]),
                 inter_sr=int(self.commInsertSr.currentText()[:-1]),
                 test_mode=self.useSampleOutput.isChecked(),
+                opti_mode=self.useOptimizer.isChecked(),
+                dyn_protect=self.dynProtect.isChecked(),
                 harmonic_hpfc=int(self.cbHarmonicHpfCutFreq.value()),
                 harmonic_sft=int(self.cbHarmonicShiftFreq.value()),
                 harmonic_gain=float(self.cbHarmonicGain.value()),
@@ -84,10 +88,12 @@ class MainUI(QtWidgets.QMainWindow, Ui_MainWindow):
                 percussive_stf=int(self.cbPercussiveShiftFreq.value()),
                 percussive_gain=float(self.cbPercussiveGain.value()),
                 sv_l=float(self.akkoJitterDownFactor.value()),
-                sv_h=float(self.akkoJitterUpFactor.value()))
+                sv_h=float(self.akkoJitterUpFactor.value()),
+                qwidget=self)
             self.CoreObject.start()
             self.CoreObject.Update.connect(self.proc_bar_bind)
             self.CoreObject.Finish.connect(self.proc_end_bind)
+            self.CoreObject.MsgBox.connect(self.msgbox)
             self.globalExec.setText(self.lang['ExecBtnTextStop'])
             self.is_started = True
         else:
@@ -103,6 +109,12 @@ class MainUI(QtWidgets.QMainWindow, Ui_MainWindow):
         self.is_started = False
         self.progressBar.setValue(0)
         self.globalExec.setText(self.lang['ExecBtnTextStart'])
+    
+    def msgbox(self,title,text,type=0):
+        if type == 0:
+            QtWidgets.QMessageBox.critical(self, title, text)
+        else:
+            QtWidgets.QMessageBox.information(self, title, text)
 
 
 if __name__ == "__main__":
