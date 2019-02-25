@@ -60,6 +60,9 @@
        <height>31</height>
       </rect>
      </property>
+     <property name="dragEnabled">
+      <bool>false</bool>
+     </property>
     </widget>
     <widget class="QPushButton" name="selectInputFile">
      <property name="geometry">
@@ -100,6 +103,9 @@
        <width>571</width>
        <height>31</height>
       </rect>
+     </property>
+     <property name="dragEnabled">
+      <bool>false</bool>
      </property>
     </widget>
     <widget class="QPushButton" name="selectOutputFile">
@@ -593,6 +599,32 @@
      </property>
      <property name="text">
       <string>样本输出模式</string>
+     </property>
+    </widget>
+    <widget class="QCheckBox" name="useOptimizer">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>40</y>
+       <width>101</width>
+       <height>16</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>优化建议</string>
+     </property>
+    </widget>
+    <widget class="QCheckBox" name="dynProtect">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>60</y>
+       <width>101</width>
+       <height>16</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>动态范围保护</string>
      </property>
     </widget>
    </widget>
