@@ -47,6 +47,7 @@ class MainUI(QtWidgets.QMainWindow, Ui_MainWindow):
         self.lang = json.loads(open('res/lang.json','rb').read())[Config['lang']]
         self.input_path,self.output_path = None, None
         self.is_started = False
+        self.load_config()
 
     def _bind_ui_(self):
         self.selectInputFile.clicked.connect(lambda:self.openfile(False))
@@ -66,6 +67,8 @@ class MainUI(QtWidgets.QMainWindow, Ui_MainWindow):
         if (not self.input_path) or (not self.output_path):
             QtWidgets.QMessageBox.warning(self,self.lang['MsgBoxW'],self.lang['LackFile'],QtWidgets.QMessageBox.Ok)
             return
+        
+        self.save_config()
         
         mode = 1
         if self.useCopyBand.isChecked():
@@ -115,6 +118,40 @@ class MainUI(QtWidgets.QMainWindow, Ui_MainWindow):
             QtWidgets.QMessageBox.critical(self, title, text)
         else:
             QtWidgets.QMessageBox.information(self, title, text)
+    
+    def load_config(self):
+        self.useCopyBand.setChecked(Config.get('defaultMode',True))
+        self.commOutputSr.setCurrentIndex(Config.get('commOutputSr',1))
+        self.commInsertSr.setCurrentIndex(Config.get('commInsertSr',0))
+        self.useSampleOutput.setChecked(Config.get('useSampleOutput',False))
+        self.useOptimizer.setChecked(Config.get('useOptimizer',False))
+        self.dynProtect.setChecked(Config.get('dynProtect',False))
+        self.cbHarmonicHpfCutFreq.setValue(Config.get('cbHarmonicHpfCutFreq',6000))
+        self.cbHarmonicShiftFreq.setValue(Config.get('cbHarmonicShiftFreq',16000))
+        self.cbHarmonicGain.setValue(Config.get('cbHarmonicGain',1.5))
+        self.cbPercussiveHpfCutFreq.setValue(Config.get('cbPercussiveHpfCutFreq',6000))
+        self.cbPercussiveShiftFreq.setValue(Config.get('cbPercussiveShiftFreq',16000))
+        self.cbPercussiveGain.setValue(Config.get('cbPercussiveGain',2.5))
+        self.akkoJitterDownFactor.setValue(Config.get('akkoJitterDownFactor',0.02))
+        self.akkoJitterUpFactor.setValue(Config.get('akkoJitterUpFactor',0.08))
+        
+    def save_config(self):
+        Config['defaultMode'] = self.useCopyBand.isChecked()
+        Config['commOutputSr'] = self.commOutputSr.currentIndex()
+        Config['commInsertSr'] = self.commInsertSr.currentIndex()
+        Config['useSampleOutput'] = self.useSampleOutput.isChecked()
+        Config['useOptimizer'] = self.useOptimizer.isChecked()
+        Config['dynProtect'] = self.dynProtect.isChecked()
+        Config['cbHarmonicHpfCutFreq'] = int(self.cbHarmonicHpfCutFreq.value())
+        Config['cbHarmonicShiftFreq'] = int(self.cbHarmonicShiftFreq.value())
+        Config['cbHarmonicGain'] = float(self.cbHarmonicGain.value())
+        Config['cbPercussiveHpfCutFreq'] = int(self.cbPercussiveHpfCutFreq.value())
+        Config['cbPercussiveShiftFreq'] = int(self.cbPercussiveShiftFreq.value())
+        Config['cbPercussiveGain'] = float(self.cbPercussiveGain.value())
+        Config['akkoJitterDownFactor'] = float(self.akkoJitterDownFactor.value())
+        Config['akkoJitterUpFactor'] = float(self.akkoJitterUpFactor.value())
+        with open('config.json','wb') as wp:
+            wp.write(json.dumps(Config,indent = 4).encode('UTF-8'))
 
 
 if __name__ == "__main__":
