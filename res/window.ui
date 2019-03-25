@@ -331,6 +331,9 @@
        <height>22</height>
       </rect>
      </property>
+     <property name="decimals">
+      <number>3</number>
+     </property>
      <property name="maximum">
       <double>0.990000000000000</double>
      </property>
@@ -350,6 +353,9 @@
        <height>22</height>
       </rect>
      </property>
+     <property name="decimals">
+      <number>3</number>
+     </property>
      <property name="maximum">
       <double>0.990000000000000</double>
      </property>
@@ -366,7 +372,7 @@
      <rect>
       <x>20</x>
       <y>240</y>
-      <width>561</width>
+      <width>571</width>
       <height>101</height>
      </rect>
     </property>
@@ -388,13 +394,13 @@
       </rect>
      </property>
      <property name="text">
-      <string>谐波HPF截至频率(Hz)：</string>
+      <string>谐波HPF截止频率(Hz)：</string>
      </property>
     </widget>
     <widget class="QLabel" name="label_8">
      <property name="geometry">
       <rect>
-       <x>210</x>
+       <x>220</x>
        <y>30</y>
        <width>111</width>
        <height>21</height>
@@ -407,7 +413,7 @@
     <widget class="QLabel" name="label_9">
      <property name="geometry">
       <rect>
-       <x>390</x>
+       <x>400</x>
        <y>30</y>
        <width>91</width>
        <height>21</height>
@@ -422,7 +428,7 @@
       <rect>
        <x>150</x>
        <y>30</y>
-       <width>51</width>
+       <width>61</width>
        <height>22</height>
       </rect>
      </property>
@@ -439,7 +445,7 @@
     <widget class="QSpinBox" name="cbHarmonicShiftFreq">
      <property name="geometry">
       <rect>
-       <x>320</x>
+       <x>330</x>
        <y>30</y>
        <width>61</width>
        <height>22</height>
@@ -458,11 +464,14 @@
     <widget class="QDoubleSpinBox" name="cbHarmonicGain">
      <property name="geometry">
       <rect>
-       <x>480</x>
+       <x>490</x>
        <y>30</y>
        <width>62</width>
        <height>22</height>
       </rect>
+     </property>
+     <property name="decimals">
+      <number>3</number>
      </property>
      <property name="maximum">
       <double>100.000000000000000</double>
@@ -477,7 +486,7 @@
     <widget class="QLabel" name="label_10">
      <property name="geometry">
       <rect>
-       <x>210</x>
+       <x>220</x>
        <y>60</y>
        <width>111</width>
        <height>21</height>
@@ -497,17 +506,20 @@
       </rect>
      </property>
      <property name="text">
-      <string>冲击HPF截至频率(Hz)：</string>
+      <string>冲击HPF截止频率(Hz)：</string>
      </property>
     </widget>
     <widget class="QDoubleSpinBox" name="cbPercussiveGain">
      <property name="geometry">
       <rect>
-       <x>480</x>
+       <x>490</x>
        <y>60</y>
        <width>62</width>
        <height>22</height>
       </rect>
+     </property>
+     <property name="decimals">
+      <number>3</number>
      </property>
      <property name="maximum">
       <double>100.000000000000000</double>
@@ -522,7 +534,7 @@
     <widget class="QSpinBox" name="cbPercussiveShiftFreq">
      <property name="geometry">
       <rect>
-       <x>320</x>
+       <x>330</x>
        <y>60</y>
        <width>61</width>
        <height>22</height>
@@ -543,7 +555,7 @@
       <rect>
        <x>150</x>
        <y>60</y>
-       <width>51</width>
+       <width>61</width>
        <height>22</height>
       </rect>
      </property>
@@ -560,7 +572,7 @@
     <widget class="QLabel" name="label_11">
      <property name="geometry">
       <rect>
-       <x>390</x>
+       <x>400</x>
        <y>60</y>
        <width>91</width>
        <height>21</height>
@@ -631,10 +643,10 @@
    <widget class="QPushButton" name="globalExec">
     <property name="geometry">
      <rect>
-      <x>600</x>
+      <x>610</x>
       <y>260</y>
-      <width>81</width>
-      <height>51</height>
+      <width>71</width>
+      <height>71</height>
      </rect>
     </property>
     <property name="font">

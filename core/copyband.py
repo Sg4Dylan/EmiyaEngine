@@ -3,7 +3,6 @@ import scipy.signal as signal
 import librosa
 import resampy
 
-
 def core(
     input_path,output_path,
     output_sr=48000,inter_sr=1,
@@ -14,6 +13,7 @@ def core(
 ):
 
     def hpd_n_shift(data, lpf, sft, gain):
+        sr = output_sr*inter_sr
         # 高通滤波
         b,a = signal.butter(3,lpf/(sr/2),'high')
         data = librosa.stft(signal.filtfilt(b,a,librosa.istft(data)))
@@ -58,7 +58,6 @@ def core(
             adp_power = np.mean(np.abs(adp))
             src_power  = np.mean(np.abs(chan))
             src_f = 1-(adp_power/src_power)
-            d_ls.append(src_f)
             adp += src_f*chan
             chan *= 0
             chan += adp
@@ -80,12 +79,13 @@ def core(
     # 参数优化
     if not opti_mode:
         return
-    optimizer(output_path,
+    optimizer(input_path,output_path,
               percussive_hpfc,percussive_stf,
               percussive_gain,msgbox)
 
 
 def optimizer(
+    input_path,
     output_path,
     hpf_cut_freq,
     hpf_mod_freq,
@@ -93,46 +93,101 @@ def optimizer(
     msgbox
 ):
     
-    # 加载音频
-    y, sr = librosa.load(output_path,mono=False,sr=None)
-    # 产生 STFT 谱
-    stft_list = [librosa.stft(chan) for chan in y]
+    def envelope_detect():
+        
+        # 加载音频
+        y, sr = librosa.load(input_path,mono=False,sr=None)
+        # 产生 STFT 谱
+        stft_list = [librosa.stft(chan) for chan in y]
+        # 阈值
+        t_gain = 85
+        # 频谱边缘
+        edge_freq = 0
+        
+        for chan in stft_list:
+            chan_sum = chan[:,0]
+            for i in range(1,chan.shape[1]):
+                chan_sum = np.add(chan_sum,chan[:,i])
+            
+            chan_sum = np.abs(chan_sum)
+            chan_max = np.max(chan_sum)
+            
+            # 滑动窗口
+            for p in range(len(chan_sum)):
+                s_win = 8
+                s_mean = 0
+                if p+s_win<len(chan_sum):
+                    s_mean = np.mean(chan_sum[p:p+s_win])
+                else:
+                    s_mean = np.mean(
+                                np.append(
+                                    chan_sum[p:len(chan_sum)],
+                                    np.repeat(chan_sum[len(chan_sum)-1],p+s_win-len(chan_sum))
+                                    )
+                                )
+                if s_mean < (chan_max/(np.exp2((t_gain)/6))):
+                    edge_freq += p*sr/2/1024
+                    break
+        
+        edge_freq /= 2
+        if edge_freq > 2500:
+            edge_freq -= 3500
+        return edge_freq
     
-    # 加载
-    l_power = 0
-    h_power = 0
-    for chan in stft_list:
-        # 截止频率为 hpf_cut_freq 的 HPF
-        b,a = signal.butter(11,hpf_cut_freq/(sr/2),'high')
-        l_data = librosa.stft(signal.filtfilt(b,a,librosa.istft(chan)))
-        l_power_sum = np.mean(np.abs(l_data.real))
+    def hpf_gain_calc():
+        # 加载音频
+        y, sr = librosa.load(output_path,mono=False,sr=None)
+        # 产生 STFT 谱
+        stft_list = [librosa.stft(chan) for chan in y]
         
-        # 截止频率为 hpf_mod_freq 的 HPF
-        b,a = signal.butter(11,hpf_mod_freq/(sr/2),'high')
-        h_data = librosa.stft(signal.filtfilt(b,a,librosa.istft(chan)))
-        h_power_sum = np.mean(np.abs(h_data.real))
+        # 加载
+        l_power = 0
+        h_power = 0
         
-        # 移相差分
-        l_power_sum -= h_power_sum
+        for chan in stft_list:
+            # 截止频率为 hpf_cut_freq 的 HPF
+            b,a = signal.butter(11,hpf_cut_freq/(sr/2),'high')
+            l_data = librosa.stft(signal.filtfilt(b,a,librosa.istft(chan)))
+            l_power_sum = np.mean(np.abs(l_data.real))
+            
+            # 截止频率为 hpf_mod_freq 的 HPF
+            b,a = signal.butter(11,hpf_mod_freq/(sr/2),'high')
+            h_data = librosa.stft(signal.filtfilt(b,a,librosa.istft(chan)))
+            h_power_sum = np.mean(np.abs(h_data.real))
+            
+            # 移相差分
+            l_power_sum -= h_power_sum
+            
+            # 合并音轨数据
+            l_power += l_power_sum
+            h_power += h_power_sum
+            
+            # 测试 HPF 输出
+            chan *= 0
+            chan += h_data
+            
+        # 频带比例矫正能量比例
+        pf = ((sr/2)-hpf_mod_freq)/(hpf_mod_freq-hpf_cut_freq)
+        l_power *= pf
+        # 计算当前增益比率
+        lnh_power = np.log2(l_power/h_power) * 6
+        # 如果是正数，就是增益偏小
+        target_r  = np.exp2((lnh_power-14.8)/6)
+        recomm_r = target_r*hpf_gain
         
-        # 合并音轨数据
-        l_power += l_power_sum
-        h_power += h_power_sum
+        #istft_list = [librosa.istft(chan) for chan in stft_list]
+        #librosa.output.write_wav('kk.wav', np.array(istft_list), sr)
         
-        # 测试 HPF 输出
-        chan *= 0
-        chan += h_data
+        return l_power, h_power, lnh_power, recomm_r, sr
     
-    # 频带比例矫正能量比例
-    pf = ((sr/2)-hpf_mod_freq)/(hpf_mod_freq-hpf_cut_freq)
-    l_power *= pf
-    # 计算当前增益比率
-    lnh_power = np.log2(l_power/h_power) * 6
-    # 如果是正数，就是增益偏小
-    target_r  = np.exp2((lnh_power-14.8)/6)
-    recomm_r = target_r*hpf_gain
+    edge_freq = envelope_detect()
+    l_power, h_power, lnh_power, recomm_r, sr = hpf_gain_calc()
+    
     # Tips
-    tips = ''
+    tips = '频率设置建议：\n'
+    tips += f'建议截止频率：{edge_freq*0.4}Hz\n'
+    tips += f'建议调制频率：{edge_freq}Hz\n\n'
+    tips += '增益设置建议：\n'
     tips += f'来源加和：{l_power}\n'
     tips += f'目标加和：{h_power}\n'
     tips += f'当前增益：{lnh_power} dB\n'
@@ -142,5 +197,3 @@ def optimizer(
         tips += '建议维持冲击增益，微调谐波增益！'
     
     msgbox.emit('优化建议',tips,1)
-    #istft_list = [librosa.istft(chan) for chan in stft_list]
-    #librosa.output.write_wav('kk.wav', np.array(istft_list), sr)
