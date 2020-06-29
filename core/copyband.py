@@ -16,18 +16,19 @@ def core(
         sr = output_sr*inter_sr
         # 高通滤波
         b,a = signal.butter(3,lpf/(sr/2),'high')
-        data = librosa.stft(signal.filtfilt(b,a,librosa.istft(data)))
+        data = librosa.stft(np.asfortranarray(signal.filtfilt(b,a,librosa.istft(data))))
         # 拷贝频谱
+        shift = sft
+        shift_point = round(shift/(sr/data.shape[0]))
+        data = np.roll(data, shift_point, axis=0)
+        # 调制
         for i in range(data.shape[1]):
             update.emit(i/data.shape[1])
-            shift = sft
-            shift_point = round(shift/(sr/data.shape[0]))
-            # 调制
-            for p in reversed(range(len(chan[:,i]))):
-                data[:,i][p] = data[:,i][p-shift_point]
+            data[:,i] = np.roll(data[:,i], shift_point, axis=0)
         # 高通滤波
-        data = librosa.stft(signal.filtfilt(b,a,librosa.istft(data)))
+        data = librosa.stft(np.asfortranarray(signal.filtfilt(b,a,librosa.istft(data))))
         data *= gain
+
         return data
     
     # Dyn Protect Tips
@@ -42,7 +43,7 @@ def core(
         y, sr = librosa.load(input_path,mono=False,sr=None,offset=round(len(y[0])/sr/2),duration=5)
     y = resampy.resample(y, sr, output_sr * inter_sr, filter='kaiser_fast')
     # 产生 STFT 谱
-    stft_list = [librosa.stft(chan) for chan in y]
+    stft_list = [librosa.stft(np.asfortranarray(chan)) for chan in y]
 
     # 谐波增强模式
     for chan in stft_list:
@@ -62,7 +63,6 @@ def core(
             chan *= 0
             chan += adp
 
-
     # 合并输出
     istft_list = [librosa.istft(chan) for chan in stft_list]
     final_data = resampy.resample(np.array(istft_list), 
@@ -70,7 +70,7 @@ def core(
                                   output_sr, 
                                   filter='kaiser_fast')
     try:
-        librosa.output.write_wav(output_path, final_data, output_sr)
+        librosa.output.write_wav(output_path, np.asfortranarray(final_data), output_sr)
     except PermissionError:
         msgbox.emit("警告",
                     "无法写入文件，请检查目标路径写入权限" \
@@ -98,7 +98,7 @@ def optimizer(
         # 加载音频
         y, sr = librosa.load(input_path,mono=False,sr=None)
         # 产生 STFT 谱
-        stft_list = [librosa.stft(chan) for chan in y]
+        stft_list = [librosa.stft(np.asfortranarray(chan)) for chan in y]
         # 阈值
         t_gain = 85
         # 频谱边缘
@@ -138,7 +138,7 @@ def optimizer(
         # 加载音频
         y, sr = librosa.load(output_path,mono=False,sr=None)
         # 产生 STFT 谱
-        stft_list = [librosa.stft(chan) for chan in y]
+        stft_list = [librosa.stft(np.asfortranarray(chan)) for chan in y]
         
         # 加载
         l_power = 0
@@ -147,12 +147,12 @@ def optimizer(
         for chan in stft_list:
             # 截止频率为 hpf_cut_freq 的 HPF
             b,a = signal.butter(11,hpf_cut_freq/(sr/2),'high')
-            l_data = librosa.stft(signal.filtfilt(b,a,librosa.istft(chan)))
+            l_data = librosa.stft(np.asfortranarray(signal.filtfilt(b,a,librosa.istft(chan))))
             l_power_sum = np.mean(np.abs(l_data.real))
             
             # 截止频率为 hpf_mod_freq 的 HPF
             b,a = signal.butter(11,hpf_mod_freq/(sr/2),'high')
-            h_data = librosa.stft(signal.filtfilt(b,a,librosa.istft(chan)))
+            h_data = librosa.stft(np.asfortranarray(signal.filtfilt(b,a,librosa.istft(chan))))
             h_power_sum = np.mean(np.abs(h_data.real))
             
             # 移相差分

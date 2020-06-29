@@ -32,7 +32,7 @@ class Core(QtCore.QThread):
             akkomode.core(
                 self.kwargs['input_path'],self.kwargs['output_path'],
                 self.kwargs['output_sr'],self.kwargs['inter_sr'],
-                self.kwargs['test_mode'],
+                self.kwargs['test_mode'],self.kwargs['dyn_protect'],
                 self.kwargs['sv_l'],self.kwargs['sv_h'],
                 self.Update,self.MsgBox)
         self.Finish.emit()
