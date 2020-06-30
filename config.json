@@ -8,13 +8,16 @@
     "commInsertSr": 0,
     "useSampleOutput": false,
     "useOptimizer": false,
-    "dynProtect": false,
+    "dynProtect": true,
     "cbHarmonicHpfCutFreq": 6000,
     "cbHarmonicShiftFreq": 16000,
     "cbHarmonicGain": 1.5,
     "cbPercussiveHpfCutFreq": 6000,
     "cbPercussiveShiftFreq": 16000,
-    "cbPercussiveGain": 2.5,
+    "cbPercussiveGain": 1.5,
     "akkoJitterDownFactor": 0.02,
-    "akkoJitterUpFactor": 0.08
+    "akkoJitterUpFactor": 0.08,
+    "onlyEnvelopeOutput": false,
+    "autoOptimizer": true,
+    "noHPF": true
 }

@@ -23,7 +23,8 @@ class Core(QtCore.QThread):
                 self.kwargs['input_path'],self.kwargs['output_path'],
                 self.kwargs['output_sr'],self.kwargs['inter_sr'],
                 self.kwargs['test_mode'],self.kwargs['opti_mode'],
-                self.kwargs['dyn_protect'],
+                self.kwargs['dyn_protect'],self.kwargs['only_envolope'],
+                self.kwargs['auto_opti'],self.kwargs['no_hpf'],
                 self.kwargs['harmonic_hpfc'],self.kwargs['harmonic_sft'],
                 self.kwargs['harmonic_gain'],self.kwargs['percussive_hpfc'],
                 self.kwargs['percussive_stf'],self.kwargs['percussive_gain'],
@@ -84,6 +85,9 @@ class MainUI(QtWidgets.QMainWindow, Ui_MainWindow):
                 test_mode=self.useSampleOutput.isChecked(),
                 opti_mode=self.useOptimizer.isChecked(),
                 dyn_protect=self.dynProtect.isChecked(),
+                only_envolope=self.onlyEnvelopeOutput.isChecked(),
+                auto_opti=self.autoOptimizer.isChecked(),
+                no_hpf=self.noHPF.isChecked(),
                 harmonic_hpfc=int(self.cbHarmonicHpfCutFreq.value()),
                 harmonic_sft=int(self.cbHarmonicShiftFreq.value()),
                 harmonic_gain=float(self.cbHarmonicGain.value()),
@@ -126,6 +130,9 @@ class MainUI(QtWidgets.QMainWindow, Ui_MainWindow):
         self.useSampleOutput.setChecked(Config.get('useSampleOutput',False))
         self.useOptimizer.setChecked(Config.get('useOptimizer',False))
         self.dynProtect.setChecked(Config.get('dynProtect',False))
+        self.onlyEnvelopeOutput.setChecked(Config.get('onlyEnvelopeOutput',False))
+        self.autoOptimizer.setChecked(Config.get('autoOptimizer',False))
+        self.noHPF.setChecked(Config.get('noHPF',False))
         self.cbHarmonicHpfCutFreq.setValue(Config.get('cbHarmonicHpfCutFreq',6000))
         self.cbHarmonicShiftFreq.setValue(Config.get('cbHarmonicShiftFreq',16000))
         self.cbHarmonicGain.setValue(Config.get('cbHarmonicGain',1.5))
@@ -142,6 +149,9 @@ class MainUI(QtWidgets.QMainWindow, Ui_MainWindow):
         Config['useSampleOutput'] = self.useSampleOutput.isChecked()
         Config['useOptimizer'] = self.useOptimizer.isChecked()
         Config['dynProtect'] = self.dynProtect.isChecked()
+        Config['onlyEnvelopeOutput'] = self.onlyEnvelopeOutput.isChecked()
+        Config['autoOptimizer'] = self.autoOptimizer.isChecked()
+        Config['noHPF'] = self.noHPF.isChecked()
         Config['cbHarmonicHpfCutFreq'] = int(self.cbHarmonicHpfCutFreq.value())
         Config['cbHarmonicShiftFreq'] = int(self.cbHarmonicShiftFreq.value())
         Config['cbHarmonicGain'] = float(self.cbHarmonicGain.value())
