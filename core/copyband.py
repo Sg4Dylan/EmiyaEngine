@@ -15,19 +15,27 @@ def core(
 
     def hpd_n_shift(data, lpf, sft, gain):
         sr = output_sr*inter_sr
+        # 计算增益
+        gain_src = round(2*data.shape[0]*sft/sr)
+        gain_dst = round(gain_src+0.025*data.shape[0])
+        src_power = np.mean(np.abs(data[gain_src:gain_dst,:]))
         # 高通滤波
         b,a = signal.butter(3,lpf/(sr/2),'high')
         data = librosa.stft(np.asfortranarray(signal.filtfilt(b,a,librosa.istft(data))))
         # 拷贝频谱
         shift = sft
-        shift_point = round(shift/(sr/data.shape[0]))
+        shift = sft-lpf
+        shift_point = round(2*data.shape[0]*shift/sr)
         # 调制
         for i in range(data.shape[1]):
             update.emit(i/data.shape[1])
             data[:,i] = np.roll(data[:,i], shift_point, axis=0)
-        # 高通滤波
-        data = librosa.stft(np.asfortranarray(signal.filtfilt(b,a,librosa.istft(data))))
-        data *= gain
+        now_power = np.mean(np.abs(data[gain_src:gain_dst,:]))
+        # 应用增益
+        if auto_opti and no_hpf:
+            data /= now_power / src_power
+        else:
+            data *= gain
 
         return data
     
@@ -63,6 +71,8 @@ def core(
     # 谐波增强模式
     for chan in stft_list:
         processed = np.empty(chan.shape)
+        
+
         if no_hpf:
             print('[CopyBand] Info: 开始频谱拷贝...')
             D_percussive = np.copy(chan)
@@ -82,15 +92,11 @@ def core(
             adp = processed
             adp_power = np.mean(np.abs(adp))
             src_power  = np.mean(np.abs(chan))
-            src_f = 1-(adp_power/src_power)
-            adp += src_f*chan
+            adj_factor = src_power/(adp_power+src_power)
+            sum_chan = np.empty(chan.shape)
+            sum_chan = (adp*adj_factor)+(chan*adj_factor)
             chan *= 0
-            chan += adp
-
-    # 自动 EQ 优化
-    if auto_opti:
-        print('[CopyBand] Info: 自动优化进行中...')
-        auto_eq(stft_list, 2*percussive_hpfc/output_sr, 2*percussive_stf/output_sr)
+            chan += sum_chan
 
     # 合并输出
     print('[CopyBand] Info: ISTFT 进行中...')
@@ -118,41 +124,6 @@ def core(
     optimizer(input_path,final_data,output_sr,
               percussive_hpfc,percussive_stf,
               percussive_gain,msgbox)
-
-
-def auto_eq(stft_list, lpf, stf):
-    # 产生 STFT 谱
-    combine_stft = np.sum(np.abs(np.asarray(stft_list)), axis=(0, 2))
-    # 平滑化
-    freq_analysis = np.log2(combine_stft)
-    raw_freq = signal.savgol_filter(freq_analysis, 61, 3)
-
-    # 计算需要调整的量
-    if stf < 0.2:
-        print(f'[CopyBand] ERROR: 调制频率不满足要求 (0.2<=STF<=0.9)，当前 STF={stf}')
-        return
-    # 第一步：调整下连接点增益
-    s_pos, e_pos = round(raw_freq.shape[0]*(stf-0.2)), round(raw_freq.shape[0]*(stf-0.1))
-    diff_tail = np.exp2(np.max(raw_freq[s_pos:e_pos])-np.min(raw_freq[s_pos:e_pos]))
-    diff_range = np.exp2(raw_freq[s_pos:e_pos]-np.min(raw_freq[s_pos:e_pos]))
-    factor = np.ones(combine_stft.shape)
-    factor[e_pos:] /= diff_tail
-    factor[s_pos:e_pos] /= diff_range + np.random.uniform(low=0.01, high=0.05, size=factor[s_pos:e_pos].shape)
-    # 第二步，调整上连接点增益
-    stf += stf - lpf
-    if stf < 0.8:
-        s_pos, e_pos = round(raw_freq.shape[0]*(stf)), round(raw_freq.shape[0]*(stf+0.1))
-        diff_tail = np.exp2(np.max(raw_freq[s_pos:e_pos])-np.min(raw_freq[s_pos:e_pos]))
-        factor[e_pos:] *= diff_tail * (1-0.05)
-        # 第三步：平滑化连接点
-        avg_pos = (combine_stft[s_pos]+combine_stft[e_pos])/2
-        factor[s_pos:e_pos] = avg_pos / combine_stft[s_pos:e_pos]
-
-    # 应用 EQ
-    for chan in stft_list:
-        newchan = np.multiply(np.copy(chan), factor[:, np.newaxis])
-        chan *= 0
-        chan += newchan
 
 
 def envelope_detect(input_path):
